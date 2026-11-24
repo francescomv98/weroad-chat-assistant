@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any
-from datetime import date
 from pydantic import ValidationError
 from . import service
 from .config import settings
@@ -74,6 +73,9 @@ class Assistant:
         self.system = build_system_prompt(self.catalog)
         self.sessions: dict[str, Session] = {}
 
+    def _today(self) -> date:
+        return self.today or date.today()
+
     # tools
 
     def _tool_update_search(self, state: SearchState, args: dict) -> tuple[SearchState, dict]:
@@ -86,7 +88,7 @@ class Assistant:
 
         data.update(args)
         new_state = SearchState.model_validate(data)
-        resp = service.search(new_state, self.catalog, date.today())
+        resp = service.search(new_state, self.catalog, self._today())
 
         return new_state, summarise_for_model(resp)
 
@@ -112,7 +114,7 @@ class Assistant:
             "bookable_departures": [
                 f"{d.start}→{d.end} €{d.price_eur} ({d.seats_left} seats, age {d.age_band})"
                 for d in sorted(trip.departures, key=lambda d: d.start)
-                if d.is_bookable(date.today())
+                if d.is_bookable(self._today())
             ],
             "url": trip.url
         }
@@ -152,11 +154,11 @@ class Assistant:
     # turn loop
 
     def _context_block(self, state: SearchState) -> str:
-        resp = service.search(state, self.catalog, date.today())
+        resp = service.search(state, self.catalog, self._today())
 
         return (
             "<context>\n"
-            f"today: {date.today().isoformat()}\n"
+            f"today: {self._today().isoformat()}\n"
             f"current_search: {state.model_dump_json(exclude_defaults=True)}\n"
             f"current_result_count: {resp.total}\n"
             "</context>\n\n"
@@ -210,7 +212,7 @@ class Assistant:
         else:
             reply = "I've updated the search - have a look at the results."
 
-        search = service.search(state, self.catalog, date.today())
+        search = service.search(state, self.catalog, self._today())
         meta = {
             "model": self.llm.model,
             "latency_ms": int((time.perf_counter() - started) * 1000),
