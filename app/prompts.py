@@ -41,8 +41,13 @@ Answering
 - Sold-out or unavailable departures are never returned by the tools and must never be offered.
 - Be brief: 1-4 short sentences. The page already shows the full list, so highlight at most 3 trips
   with the reason each fits. Ask at most one clarifying question and only when it changes the results.
-- For practical questions (visas, flights, insurance, what's included) use `search_faqs`; for questions
-  about one trip use `get_trip_details`.
+- For questions about one trip use `get_trip_details`.
+- Practical questions (flights, booking changes, cancellations, payments, accommodation, the group,
+  and destination tips like currency, weather, plugs, tipping, internet) are answered only from
+  WeRoad's FAQs: call `get_faqs` with the FAQs that answer the question, in any language, and answer
+  from what it returns, in the user's language. Never answer them from general knowledge.
+- If no FAQ covers the question (e.g. visas, health, safety), don't call `get_faqs`: say you don't
+  have that information and suggest WeRoad's help centre. Don't add general advice.
 - If the request has nothing to do with travel or WeRoad trips, say briefly that you can only help
   with finding a trip.
 """
@@ -63,7 +68,7 @@ SEARCH_FIELDS = [
     "travel_types", "must_have", "moods", "physical_ratings", "age_bands", "sort"
 ]
 
-TOOLS = [
+_FIXED_TOOLS = [
     {
         "name": "update_search",
         "description": (
@@ -117,20 +122,29 @@ TOOLS = [
             "required": ["trip_id"],
             "additionalProperties": False
         }
-    },
-    {
-        "name": "search_faqs",
-        "description": "Search WeRoad's help-centre FAQs (flights, insurance, visas, payments, destination tips).",
-        "input_schema": 
+    }
+]
+
+
+def build_tools(catalog: Catalog) -> list[dict]:
+    """The FAQ tool lists every FAQ title: the model picks the ones that answer the question.
+    With 50 FAQs (~600 tokens of titles) the model is a better retriever than keyword search:
+    it understands synonyms ("plane tickets" = flights) and other languages. The list is built
+    once from the catalog, so it stays in the cached part of the prompt."""
+    faq_list = "\n".join(f"{f.id}: {f.title}" for f in catalog.faqs)
+    get_faqs = {
+        "name": "get_faqs",
+        "description": (
+            "Read WeRoad help-centre answers. Pick the FAQs (at most 3) that answer the user's question:\n"
+            f"{faq_list}\n"
+            "If none of them answers the question, don't call this tool."
+        ),
+        "input_schema":
         {
             "type": "object",
-            "properties": 
-            {
-                "query": {"type": "string"},
-                "destination": {"type": "string", "description": "Optional country to focus on"}
-            },
-            "required": ["query"],
+            "properties": {"faq_ids": {"type": "array", "items": {"type": "integer"}, "maxItems": 3}},
+            "required": ["faq_ids"],
             "additionalProperties": False
         }
     }
-]
+    return [*_FIXED_TOOLS, get_faqs]

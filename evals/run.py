@@ -11,7 +11,7 @@ from app.config import Settings, settings
 from app.data import get_catalog
 from app.llm import LLMClient, OpenAIClient
 from app.models import SearchState
-from app.prompts import TOOLS
+from app.prompts import build_tools
 from evals import checks
 
 FROZEN_TODAY = date(2026, 11, 24) 
@@ -38,7 +38,7 @@ def warm_up(label: str, client: LLMClient) -> None:
     """One unmeasured call per model: the first request of a run also pays for opening
     the connection, which showed up as a 10-17 s "p99" that had nothing to do with the model."""
     try:
-        client.create(system="Reply with OK.", messages=[{"role": "user", "content": "ping"}], tools=TOOLS)
+        client.create(system="Reply with OK.", messages=[{"role": "user", "content": "ping"}], tools=build_tools(get_catalog()))
     except Exception as e:  # noqa: BLE001 - the real run reports the error on every turn anyway
         print(f"  warm-up failed for {label}: {e}")
 
@@ -62,6 +62,7 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         
         user_text += " " + turn["user"]
         before = state.model_dump(mode="json")
+        history_len = len(bot.sessions[session_id].messages) if session_id else 0
         try:
             result = bot.chat(turn["user"], state, session_id)
         except Exception as e:  
@@ -75,6 +76,16 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         messages = bot.sessions[session_id].messages
         grounded = checks.readable([m["content"] for m in messages if m["role"] == "tool"])
         rec.update(evaluate_turn(turn, before, state.model_dump(mode="json"), result, grounded, user_text, names, catalog_text))
+
+        # FAQ retrieval is judged on what the FAQ tool returned in this turn only.
+        this_turn = [m["content"] for m in messages[history_len:] if m["role"] == "tool"]
+        found, admitted, faq_problems = checks.check_faq(
+            turn.get("faq"), checks.faq_titles_returned(this_turn), result.reply,
+            {f.id: f.title for f in bot.catalog.faqs},
+        )
+        rec.update(faq_found=found, faq_admitted=admitted)
+        rec["problems"] += faq_problems
+        rec["correct"] = rec["correct"] and not faq_problems
         records.append(rec)
 
     return records
@@ -142,6 +153,8 @@ def summarize(records: list[dict]) -> dict:
     costs = [r["cost_usd"] for r in done if r["cost_usd"] is not None]
     with_expect = [r for r in done if r["has_expect"]]
     zero = [r for r in done if r["zero_ok"] is not None]
+    faq_found = [r for r in done if r.get("faq_found") is not None]
+    faq_admitted = [r for r in done if r.get("faq_admitted") is not None]
     labelled = [r for r in done if r["update_label"] is not None]
     upd_tp = sum(r["update_label"] and r["update_called"] for r in labelled)
     upd_fp = sum(not r["update_label"] and r["update_called"] for r in labelled)
@@ -166,6 +179,8 @@ def summarize(records: list[dict]) -> dict:
         "update_prf": checks.prf(upd_tp, upd_fp, upd_fn),
         "invented": (sum(bool(r["invented"]) for r in done), len(done)),
         "zero": (sum(r["zero_ok"] for r in zero), len(zero)),
+        "faq_found": (sum(r["faq_found"] for r in faq_found), len(faq_found)),
+        "faq_admitted": (sum(r["faq_admitted"] for r in faq_admitted), len(faq_admitted)),
         "by_category": {c: (sum(v), len(v)) for c, v in sorted(by_category.items())}
     }
 
@@ -207,7 +222,9 @@ def render(summaries: dict[str, dict], records: list[dict], args) -> str:
         ("update_search recall", lambda s: _pct(s["update_prf"][1])),
         ("update_search F1", lambda s: _pct(s["update_prf"][2])),
         ("Turns with invented facts (lower is better)", lambda s: _ratio(s["invented"])),
-        ("Zero results handled", lambda s: _ratio(s["zero"]))
+        ("Zero results handled", lambda s: _ratio(s["zero"])),
+        ("FAQ found (retrieval)", lambda s: _ratio(s["faq_found"])),
+        ("No FAQ answer admitted", lambda s: _ratio(s["faq_admitted"]))
     ]
 
     lines = [

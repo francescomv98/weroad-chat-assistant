@@ -13,8 +13,7 @@ from .config import settings
 from .data import Catalog, get_catalog
 from .llm import LLMClient, estimate_cost_usd, make_client
 from .models import SearchResponse, SearchState
-from .prompts import TOOLS, build_system_prompt
-from .search import tokenize
+from .prompts import build_system_prompt, build_tools
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +77,7 @@ class Assistant:
         self.llm = llm or make_client()
         self.today = today
         self.system = build_system_prompt(self.catalog)
+        self.tools = build_tools(self.catalog)
         self.sessions: dict[str, Session] = {}
 
     def _today(self) -> date:
@@ -154,21 +154,14 @@ class Assistant:
             "url": trip.url
         }
 
-    def _tool_search_faqs(self, query: str, destination: str | None = None) -> dict:
-        terms = set(tokenize(query))
-        scored = []
+    def _tool_get_faqs(self, faq_ids: list[int]) -> dict:
+        by_id = {f.id: f for f in self.catalog.faqs}
+        unknown = [i for i in faq_ids if i not in by_id]
+        if unknown:
+            raise ValueError(f"unknown FAQ ids {unknown}: use the ids listed in the tool description")
+        chosen = [by_id[i] for i in dict.fromkeys(faq_ids)][:3]
 
-        for faq in self.catalog.faqs:
-            if destination and faq.destination and faq.destination.lower() != destination.lower():
-                continue
-            words = set(tokenize(faq.title + " " + faq.body))
-            score = len(terms & words) + (2 if destination and faq.destination else 0)
-            if score:
-                scored.append((score, faq))
-
-        scored.sort(key=lambda x: -x[0])
-
-        return {"faqs": [{"title": f.title, "answer": f.body, "url": f.url} for _, f in scored[:3]]}
+        return {"faqs": [{"title": f.title, "answer": f.body, "url": f.url} for f in chosen]}
 
     def _run_tool(self, name: str, args: dict, state: SearchState) -> tuple[SearchState, str, bool]:
         """Returns (possibly new state, result json, is_error)."""
@@ -177,8 +170,8 @@ class Assistant:
                 state, result = self._tool_update_search(state, dict(args))
             elif name == "get_trip_details":
                 result = self._tool_get_trip_details(int(args["trip_id"]))
-            elif name == "search_faqs":
-                result = self._tool_search_faqs(args["query"], args.get("destination"))
+            elif name == "get_faqs":
+                result = self._tool_get_faqs([int(i) for i in args["faq_ids"]])
             else:
                 return state, json.dumps({"error": f"unknown tool {name}"}), True
             
@@ -220,7 +213,7 @@ class Assistant:
         reply = ""
 
         for _round in range(settings.max_tool_rounds):
-            response = self.llm.create(system=self.system, messages=messages, tools=TOOLS)
+            response = self.llm.create(system=self.system, messages=messages, tools=self.tools)
             for k in usage:
                 usage[k] += response.usage.get(k, 0)
 

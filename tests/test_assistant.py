@@ -123,10 +123,26 @@ def test_every_message_carries_today_and_current_search(catalog):
     assert content.endswith("cheaper please")
 
 
-def test_faq_search_prefers_the_destination_and_skips_other_countries(catalog):
-    bot, _ = make(catalog)
-    faqs = bot._tool_search_faqs("visa", destination="Japan")["faqs"]
-    assert [f["title"] for f in faqs] == ["Visa for Japan", "Do I need a visa?"]
+def test_the_model_sees_every_faq_title_and_gets_back_the_ones_it_picks(catalog):
+    bot, llm = make(catalog, call("get_faqs", {"faq_ids": [2]}), answer("Most EU passports get a visa on arrival."))
+
+    turn = bot.chat("serve il visto per il Giappone?", SearchState())
+
+    description = next(t for t in bot.tools if t["name"] == "get_faqs")["description"]
+    assert all(f"{f.id}: {f.title}" in description for f in catalog.faqs)
+    faqs = json.loads(tool_results(llm)[0]["content"])["faqs"]
+    assert [f["title"] for f in faqs] == ["Visa for Japan"]
+    assert turn.meta["tool_calls"] == ["get_faqs"]
+
+
+def test_an_unknown_faq_id_goes_back_to_the_model(catalog):
+    bot, llm = make(catalog, call("get_faqs", {"faq_ids": [99]}), call("get_faqs", {"faq_ids": [1]}), answer("ok"))
+
+    bot.chat("do I need a visa?", SearchState())
+
+    error, retry = tool_results(llm)
+    assert error["is_error"] and "unknown FAQ ids [99]" in error["content"]
+    assert json.loads(retry["content"])["faqs"][0]["title"] == "Do I need a visa?"
 
 
 def test_past_dates_move_to_the_next_year(catalog):
