@@ -127,3 +127,33 @@ def test_faq_search_prefers_the_destination_and_skips_other_countries(catalog):
     bot, _ = make(catalog)
     faqs = bot._tool_search_faqs("visa", destination="Japan")["faqs"]
     assert [f["title"] for f in faqs] == ["Visa for Japan", "Do I need a visa?"]
+
+
+def test_past_dates_move_to_the_next_year(catalog):
+    # Real models did this in the evaluation: "19-24 October" became a date that had already passed.
+    bot, llm = make(catalog, call("update_search", {"date_from": "2026-10-19", "date_to": "2026-10-24"}), answer("ok"))
+
+    turn = bot.chat("I only have 19-24 October", SearchState())
+
+    assert (str(turn.search.state.date_from), str(turn.search.state.date_to)) == ("2027-10-19", "2027-10-24")
+    result = tool_results(llm)[0]
+    assert not result["is_error"]
+    assert "2027-10-19 to 2027-10-24" in json.loads(result["content"])["note"]
+
+
+def test_a_range_that_has_already_started_moves_as_a_whole(catalog):
+    # TODAY is 10 Jan 2027: "5-15 January" has started, so the next one is in 2028, both dates.
+    bot, _ = make(catalog, call("update_search", {"date_from": "2027-01-05", "date_to": "2027-01-15"}), answer("ok"))
+
+    state = bot.chat("5-15 January", SearchState()).search.state
+
+    assert (str(state.date_from), str(state.date_to)) == ("2028-01-05", "2028-01-15")
+
+
+def test_old_dates_already_on_the_page_dont_block_other_changes(catalog):
+    bot, _ = make(catalog, call("update_search", {"max_price": 1000}), answer("ok"))
+    start = SearchState(date_from="2026-12-01", date_to="2027-03-01")  # before TODAY, set by the page
+
+    turn = bot.chat("under 1000", start)
+
+    assert turn.search.state.max_price == 1000

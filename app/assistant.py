@@ -65,6 +65,13 @@ def summarise_for_model(resp: SearchResponse) -> dict:
     return out
 
 
+def _add_years(d: date, years: int) -> date:
+    try:
+        return d.replace(year=d.year + years)
+    except ValueError: 
+        return d.replace(year=d.year + years, day=28)
+
+
 class Assistant:
     def __init__(self, llm: LLMClient | None = None, catalog: Catalog | None = None, today: date | None = None) -> None:
         self.catalog = catalog or get_catalog()
@@ -88,9 +95,37 @@ class Assistant:
 
         data.update(args)
         new_state = SearchState.model_validate(data)
+        new_state, note = self._move_past_dates(new_state, args)
         resp = service.search(new_state, self.catalog, self._today())
+        summary = summarise_for_model(resp)
+        if note:
+            summary["note"] = note
 
-        return new_state, summarise_for_model(resp)
+        return new_state, summary
+
+    def _move_past_dates(self, state: SearchState, args: dict) -> tuple[SearchState, str | None]:
+        """Models often resolve "19-24 October" to a date that has already passed: the search then
+        finds nothing and the user is told there are no trips. Dates set in this call that are in
+        the past move forward by whole years (both together, so the range stays the same), and the
+        model is told, so it can say which dates it searched."""
+        today = self._today()
+        start = state.date_from or state.date_to
+        set_now = [getattr(state, n) for n in ("date_from", "date_to") if n in args and getattr(state, n)]
+        if not any(d < today for d in set_now):
+            return state, None
+
+        years = 1
+        while _add_years(start, years) < today:
+            years += 1
+        moved = state.model_copy(update={
+            "date_from": _add_years(state.date_from, years) if state.date_from else None,
+            "date_to": _add_years(state.date_to, years) if state.date_to else None,
+        })
+        note = (
+            f"The dates you set were in the past (today is {today}), so the search uses the next "
+            f"occurrence: {moved.date_from or '...'} to {moved.date_to or '...'}. Tell the user which dates you searched."
+        )
+        return moved, note
 
     def _tool_get_trip_details(self, trip_id: int) -> dict:
         trip = self.catalog.trip(trip_id)
