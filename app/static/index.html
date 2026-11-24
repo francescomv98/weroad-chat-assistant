@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trip Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<style>
+  :root {
+    --red: #E94B4B;
+    --red-soft: #FDECEC;
+    --ink: #222222;
+    --white: #FFFFFF;
+    --light: #F5F5F5;
+    --muted: #777777;
+    --line: #E6E6E6;
+    --radius: 18px;
+    --shadow: 0 6px 20px rgba(34, 34, 34, .07);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: "Nunito", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--white);
+    font-size: 15px;
+  }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: var(--red); }
+
+  /* ---------- layout ---------- */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--line);
+    background: var(--white);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .logo {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: var(--red); color: var(--white);
+    display: grid; place-items: center; font-size: 20px;
+  }
+  header h1 { font-size: 20px; margin: 0; font-weight: 800; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 400px;
+    height: calc(100vh - 67px);
+  }
+  .left { overflow-y: auto; padding: 20px 24px 40px; }
+  .right { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--light); }
+
+  /* ---------- filters ---------- */
+  .filters {
+    background: var(--light);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+  .grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+  .field label {
+    display: block; font-size: 12px; font-weight: 700;
+    color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .field input, .field select {
+    width: 100%; padding: 10px 12px;
+    border: 1.5px solid var(--line); border-radius: 12px;
+    background: var(--white); outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--red); }
+  .field.wide { grid-column: 1 / -1; }
+  .field.invalid input { border-color: var(--red); background: var(--red-soft); }
+  .field .err {
+    display: block; margin-top: 5px; font-size: 12px; font-weight: 600;
+    color: var(--red); animation: pop .2s ease-out;
+  }
+  .field.span2 { grid-column: span 2; }
+  @media (max-width: 500px) { .field.span2 { grid-column: 1 / -1; } }
+
+  /* ---------- date range picker (flatpickr) ---------- */
+  .date-wrap { position: relative; }
+  .date-wrap input { cursor: pointer; padding-right: 34px; }
+  .date-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    width: 22px; height: 22px; border-radius: 50%; border: 0;
+    background: var(--light); color: var(--muted); cursor: pointer; font-weight: 800; line-height: 1;
+  }
+  .date-clear:hover { background: var(--red-soft); color: var(--red); }
+  .flatpickr-calendar {
+    font-family: inherit; border: 0; border-radius: 18px;
+    box-shadow: 0 14px 40px rgba(34, 34, 34, .16); padding: 6px;
+  }
+  .flatpickr-calendar.arrowTop:before, .flatpickr-calendar.arrowTop:after { display: none; }
+  .flatpickr-months .flatpickr-month { height: 40px; }
+  .flatpickr-current-month { font-size: 15px; font-weight: 800; padding-top: 10px; }
+  .flatpickr-current-month .flatpickr-monthDropdown-months { font-weight: 800; }
+  .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month { top: 6px; }
+  .flatpickr-months .flatpickr-prev-month:hover svg, .flatpickr-months .flatpickr-next-month:hover svg { fill: var(--red); }
+  span.flatpickr-weekday { color: var(--muted); font-weight: 700; font-size: 12px; }
+  .flatpickr-day { border-radius: 12px; font-weight: 600; color: var(--ink); }
+  .flatpickr-day:hover { background: var(--light); border-color: var(--light); }
+  .flatpickr-day.today { border-color: var(--red); }
+  .flatpickr-day.today:hover { background: var(--red-soft); color: var(--ink); border-color: var(--red); }
+  .flatpickr-day.inRange, .flatpickr-day.inRange:hover {
+    background: var(--red-soft); border-color: var(--red-soft);
+    box-shadow: -5px 0 0 var(--red-soft), 5px 0 0 var(--red-soft);
+  }
+  .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange,
+  .flatpickr-day.selected:hover, .flatpickr-day.startRange:hover, .flatpickr-day.endRange:hover {
+    background: var(--red); border-color: var(--red); color: var(--white);
+  }
+  .flatpickr-day.selected.startRange + .endRange:not(:nth-child(7n+1)),
+  .flatpickr-day.startRange.startRange + .endRange:not(:nth-child(7n+1)),
+  .flatpickr-day.endRange.startRange + .endRange:not(:nth-child(7n+1)) { box-shadow: -10px 0 0 var(--red); }
+  .flatpickr-day.flatpickr-disabled, .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay { color: #C4C4C4; }
+
+  .form-error {
+    margin-top: 14px; padding: 10px 14px; border-radius: 12px;
+    background: var(--red-soft); color: var(--red); font-weight: 600; font-size: 13.5px;
+    animation: pop .2s ease-out;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1.5px solid var(--line); background: var(--white);
+    border-radius: 999px; padding: 6px 14px; cursor: pointer;
+    font-weight: 600; font-size: 13px; transition: all .15s;
+  }
+  .chip:hover { border-color: var(--red); }
+  .chip.on { background: var(--red); border-color: var(--red); color: var(--white); }
+  .chip.tag { background: var(--red-soft); border-color: transparent; color: var(--red); cursor: default; }
+  .chip.tag button {
+    border: 0; background: none; color: var(--red); cursor: pointer;
+    margin-left: 4px; padding: 0; font-weight: 800;
+  }
+
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .btn {
+    border: 0; border-radius: 999px; padding: 10px 22px;
+    font-weight: 700; cursor: pointer; transition: transform .1s, opacity .15s;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { background: var(--red); color: var(--white); }
+  .btn.ghost { background: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--ink); }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  /* ---------- results ---------- */
+  .summary { margin: 22px 0 12px; display: flex; align-items: baseline; gap: 10px; }
+  .summary h2 { margin: 0; font-size: 20px; font-weight: 800; }
+  .summary span { color: var(--muted); }
+
+  .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+  .card {
+    background: var(--white); border: 1px solid var(--line);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: var(--shadow); display: flex; flex-direction: column;
+    transition: transform .15s;
+  }
+  .card:hover { transform: translateY(-3px); }
+  .card .top {
+    background: var(--red); color: var(--white);
+    padding: 14px 16px; position: relative;
+  }
+  .card .top .emoji { font-size: 28px; position: absolute; right: 14px; top: 10px; }
+  .card .top small { opacity: .85; font-weight: 600; }
+  .card .top h3 { margin: 2px 40px 0 0; font-size: 17px; line-height: 1.25; }
+  .card .body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .card .desc { color: var(--muted); font-size: 13.5px; margin: 0; }
+  .meta { display: flex; gap: 12px; font-size: 13px; font-weight: 600; flex-wrap: wrap; }
+  .types { display: flex; gap: 6px; flex-wrap: wrap; }
+  .types span { background: var(--light); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); }
+  .deps { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+  .dep { display: flex; justify-content: space-between; background: var(--light); padding: 5px 10px; border-radius: 10px; }
+  .dep s { color: var(--muted); margin-right: 4px; }
+  .badge { color: var(--red); font-weight: 700; }
+  .card .foot { display: flex; justify-content: space-between; align-items: center; padding: 0 16px 14px; }
+  .price { font-size: 13px; color: var(--muted); }
+  .price b { font-size: 20px; color: var(--ink); }
+
+  .empty {
+    background: var(--light); border-radius: var(--radius);
+    padding: 22px; text-align: center;
+  }
+  .empty .big { font-size: 40px; }
+  .empty h3 { margin: 6px 0; }
+  .empty p { color: var(--muted); margin: 0 0 14px; }
+  .relax { display: flex; flex-direction: column; gap: 8px; max-width: 520px; margin: 0 auto; }
+  .relax button {
+    display: flex; justify-content: space-between; gap: 10px;
+    border: 1.5px solid var(--line); background: var(--white);
+    padding: 10px 14px; border-radius: 12px; cursor: pointer; text-align: left;
+  }
+  .relax button:hover { border-color: var(--red); }
+  .relax button span { color: var(--red); font-weight: 700; white-space: nowrap; }
+  .subhead { margin: 24px 0 10px; font-weight: 800; }
+
+  /* ---------- chat ---------- */
+  .chat-head {
+    padding: 14px 18px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--line); background: var(--white);
+  }
+  .avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--red-soft); display: grid; place-items: center; font-size: 18px;
+  }
+  .chat-head b { display: block; }
+  .chat-head small { color: var(--muted); }
+  .chat-head .btn { margin-left: auto; padding: 6px 12px; font-size: 13px; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .msg {
+    max-width: 85%; padding: 10px 14px; border-radius: 18px;
+    line-height: 1.45; white-space: normal; word-wrap: break-word;
+    animation: pop .2s ease-out;
+  }
+  .msg.bot { background: var(--white); border-bottom-left-radius: 6px; box-shadow: var(--shadow); }
+  .msg.user { background: var(--red); color: var(--white); margin-left: auto; border-bottom-right-radius: 6px; }
+  .msg.error { background: var(--red-soft); color: var(--red); }
+  .msg .info { display: block; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+  @keyframes pop { from { transform: translateY(6px); opacity: 0; } }
+
+  .typing { display: inline-flex; gap: 4px; }
+  .typing i {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+    animation: blink 1s infinite;
+  }
+  .typing i:nth-child(2) { animation-delay: .15s; }
+  .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 50% { opacity: .2; transform: translateY(-2px); } }
+
+  .starters { padding: 0 18px 10px; }
+  .starters .chip { font-size: 12.5px; }
+
+  .composer {
+    display: flex; gap: 8px; padding: 12px; background: var(--white);
+    border-top: 1px solid var(--line);
+  }
+  .composer input {
+    flex: 1; padding: 11px 16px; border-radius: 999px;
+    border: 1.5px solid var(--line); outline: none; background: var(--light);
+  }
+  .composer input:focus { border-color: var(--red); background: var(--white); }
+  .composer .btn { padding: 10px 16px; }
+
+  /* ---------- mobile ---------- */
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    .left { padding: 16px; }
+    .right { border-left: 0; border-top: 1px solid var(--line); height: 80vh; }
+    header { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">✈️</div>
+  <div>
+    <h1>WeRoad - Trip Finder</h1>
+    <p>Find your next group adventure, or just ask the assistant</p>
+  </div>
+</header>
+
+<main>
+  <!-- ============ search ============ -->
+  <section class="left">
+    <form class="filters" id="filters" novalidate>
+      <div class="grid">
+        <div class="field wide">
+          <label for="f-text">Keywords</label>
+          <input id="f-text" placeholder="e.g. beach, volcano, safari…">
+        </div>
+        <div class="field span2">
+          <label for="f-dates">Travel dates</label>
+          <div class="date-wrap">
+            <input id="f-dates" placeholder="📅 Any dates">
+            <button type="button" class="date-clear" id="dates-clear" aria-label="Clear dates" hidden>×</button>
+          </div>
+          <input id="f-from" type="hidden">
+          <input id="f-to" type="hidden">
+        </div>
+        <div class="field">
+          <label for="f-price">Max price €</label>
+          <input id="f-price" type="number" min="1" placeholder="Any">
+        </div>
+        <div class="field">
+          <label for="f-min">Min days</label>
+          <input id="f-min" type="number" min="1" placeholder="Any">
+        </div>
+        <div class="field">
+          <label for="f-max">Max days</label>
+          <input id="f-max" type="number" min="1" placeholder="Any">
+        </div>
+        <div class="field">
+          <label for="f-sort">Sort by</label>
+          <select id="f-sort">
+            <option value="relevance">Relevance</option>
+            <option value="price">Price</option>
+            <option value="date">Date</option>
+            <option value="rating">Rating</option>
+          </select>
+        </div>
+        <div class="field wide">
+          <label>Continent</label>
+          <div class="chips" id="f-continents"></div>
+        </div>
+        <div class="field">
+          <label for="f-type">Add travel type</label>
+          <select id="f-type"><option value="">Choose…</option></select>
+        </div>
+      </div>
+      <div class="field wide" id="extra-wrap" style="margin-top:12px" hidden>
+        <label>More filters</label>
+        <div class="chips" id="extra"></div>
+      </div>
+      <div class="form-error" id="form-error" hidden></div>
+      <div class="row">
+        <button class="btn primary" type="submit">Search</button>
+        <button class="btn ghost" type="button" id="clear">Clear filters</button>
+      </div>
+    </form>
+
+    <div class="summary">
+      <h2 id="count">Loading…</h2>
+      <span id="count-sub"></span>
+    </div>
+    <div id="results"></div>
+  </section>
+
+  <!-- ============ chat ============ -->
+  <aside class="right">
+    <div class="chat-head">
+      <div class="avatar">🧭</div>
+      <div><b>Travel assistant</b><small>Tell me what you're dreaming of</small></div>
+      <button class="btn ghost" id="new-chat" type="button">New chat</button>
+    </div>
+    <div class="messages" id="messages">
+      <div class="msg bot">Hi! 👋 Tell me where, when and how you'd like to travel, and I'll update the search for you.</div>
+    </div>
+    <div class="starters chips" id="starters">
+      <button class="chip" type="button">🏝️ A relaxing beach week in Asia under €1500</button>
+      <button class="chip" type="button">🎉 A party trip in Europe next summer</button>
+      <button class="chip" type="button">🥾 Trekking in South America, about 2 weeks</button>
+    </div>
+    <form class="composer" id="composer">
+      <input id="chat-input" placeholder="Type a message…" autocomplete="off" maxlength="2000">
+      <button class="btn primary" type="submit" id="send">Send</button>
+    </form>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const CONTINENT_EMOJI = { Africa: "🦁", America: "🌵", Asia: "🏯", Europe: "🏰", Oceania: "🐨" };
+
+// The single search state, shared by the form and the assistant (same shape as SearchState).
+let state = emptyState();
+let sessionId = null;
+let today = new Date().toISOString().slice(0, 10);
+
+function emptyState() {
+  return {
+    text: null, text_match: "all", date_from: null, date_to: null, max_price: null,
+    min_days: null, max_days: null, continents: [], destinations: [], travel_types: [],
+    must_have: [], moods: {}, physical_ratings: [], age_bands: [], sort: "relevance"
+  };
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function fmtDate(iso) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const d = data.detail;
+    const msg = Array.isArray(d)
+      ? d.map((e) => e.msg.replace(/^Value error,\s*/, "")).join("; ")
+      : d || `Something went wrong (error ${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// ---------- form <-> state ----------
+
+function numOrNull(v) { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : null; }
+
+function readForm() {
+  const text = $("f-text").value.trim();
+  if (text !== (state.text || "")) state.text_match = "all";
+  state.text = text || null;
+  state.date_from = $("f-from").value || null;
+  state.date_to = $("f-to").value || null;
+  state.max_price = numOrNull($("f-price").value);
+  state.min_days = numOrNull($("f-min").value);
+  state.max_days = numOrNull($("f-max").value);
+  state.sort = $("f-sort").value;
+}
+
+function fillForm() {
+  $("f-text").value = state.text || "";
+  $("f-from").value = state.date_from || "";
+  $("f-to").value = state.date_to || "";
+  if (datePicker) datePicker.setDate([state.date_from, state.date_to].filter(Boolean), false);
+  $("dates-clear").hidden = !(state.date_from || state.date_to);
+  $("f-price").value = state.max_price || "";
+  $("f-min").value = state.min_days || "";
+  $("f-max").value = state.max_days || "";
+  $("f-sort").value = state.sort || "relevance";
+  document.querySelectorAll("#f-continents .chip").forEach((c) => {
+    c.classList.toggle("on", state.continents.includes(c.dataset.value));
+  });
+  renderExtra();
+  updateLimits();
+  validate();
+}
+
+// ---------- validation ----------
+
+// Limit the pickers so impossible ranges are hard to choose in the first place.
+function updateLimits() {
+  $("f-from").min = today;
+  $("f-from").max = state.date_to || "";
+  $("f-to").min = state.date_from || today;
+  $("f-min").max = state.max_days || "";
+  $("f-max").min = state.min_days || 1;
+}
+
+function setFieldError(inputId, message) {
+  const field = $(inputId).closest(".field");
+  field.classList.toggle("invalid", !!message);
+  let err = field.querySelector(".err");
+  if (!message) { if (err) err.remove(); return; }
+  if (!err) { err = document.createElement("small"); err.className = "err"; field.appendChild(err); }
+  err.textContent = message;
+}
+
+function showFormError(message) {
+  $("form-error").textContent = message ? `😕 ${message}` : "";
+  $("form-error").hidden = !message;
+}
+
+// Same rules as SearchState's validator, checked before calling the API.
+function validate() {
+  const badDates = state.date_from && state.date_to && state.date_from > state.date_to;
+  const badDays = state.min_days && state.max_days && state.min_days > state.max_days;
+  setFieldError("f-from", badDates ? " " : null);
+  setFieldError("f-to", badDates ? "📅 Return date must be after the departure date" : null);
+  setFieldError("f-min", badDays ? " " : null);
+  setFieldError("f-max", badDays ? `🗓️ Must be at least ${state.min_days} days` : null);
+  showFormError(null);
+  return !badDates && !badDays;
+}
+
+function onRangeInput() { readForm(); updateLimits(); validate(); }
+
+// ---------- date range picker ----------
+
+let datePicker = null;
+
+function setDates(from, to) {
+  $("f-from").value = from || "";
+  $("f-to").value = to || "";
+  readForm();
+  fillForm();
+  runSearch();
+}
+
+function initDatePicker() {
+  if (!window.flatpickr) {
+    // CDN not reachable (e.g. offline): fall back to the browser's own date inputs.
+    $("f-dates").closest(".date-wrap").remove();
+    ["f-from", "f-to"].forEach((id) => { $(id).type = "date"; });
+    return;
+  }
+  datePicker = flatpickr("#f-dates", {
+    mode: "range",
+    minDate: today,
+    dateFormat: "Y-m-d",
+    altInput: true,
+    altFormat: "D j M Y",
+    showMonths: window.innerWidth > 760 ? 2 : 1,
+    disableMobile: true,
+    locale: { firstDayOfWeek: 1, rangeSeparator: "  →  " },
+    onClose(selected, _str, fp) {
+      const fmt = (d) => fp.formatDate(d, "Y-m-d");
+      const from = selected[0] ? fmt(selected[0]) : null;
+      const to = selected[1] ? fmt(selected[1]) : null;
+      if (from !== state.date_from || to !== state.date_to) setDates(from, to);
+    }
+  });
+}
+
+// Filters the form has no field for (usually set by the assistant) are shown as removable tags.
+function renderExtra() {
+  const tags = [];
+  const add = (label, remove) => tags.push({ label, remove });
+  if (state.text && state.text_match === "any") add("any keyword", () => { state.text_match = "all"; });
+  state.destinations.forEach((d) => add(`📍 ${d}`, () => { state.destinations = state.destinations.filter((x) => x !== d); }));
+  state.travel_types.forEach((t) => add(`🧳 ${t}`, () => { state.travel_types = state.travel_types.filter((x) => x !== t); }));
+  state.must_have.forEach((m) => add(`✨ ${m}`, () => { state.must_have = state.must_have.filter((x) => x !== m); }));
+  Object.entries(state.moods || {}).forEach(([k, v]) => {
+    if (v != null) add(`${k} ≥ ${v}`, () => { delete state.moods[k]; });
+  });
+  state.physical_ratings.forEach((p) => add(`💪 ${p.toLowerCase()}`, () => { state.physical_ratings = state.physical_ratings.filter((x) => x !== p); }));
+  state.age_bands.forEach((a) => add(`🎂 ${a}`, () => { state.age_bands = state.age_bands.filter((x) => x !== a); }));
+
+  const box = $("extra");
+  box.innerHTML = "";
+  tags.forEach((t) => {
+    const el = document.createElement("span");
+    el.className = "chip tag";
+    el.innerHTML = `${esc(t.label)}<button type="button" aria-label="Remove">×</button>`;
+    el.querySelector("button").onclick = () => { readForm(); t.remove(); fillForm(); runSearch(); };
+    box.appendChild(el);
+  });
+  $("extra-wrap").hidden = tags.length === 0;
+}
+
+// ---------- results ----------
+
+function card(r) {
+  const deps = r.departures.slice(0, 3).map((d) => `
+    <div class="dep">
+      <span>${fmtDate(d.start)} → ${fmtDate(d.end)}</span>
+      <span>
+        ${d.base_price_eur && d.base_price_eur > d.price_eur ? `<s>€${d.base_price_eur}</s>` : ""}
+        <b>€${d.price_eur}</b>
+        ${d.status === "ALMOST_FULL" || d.seats_left <= 3 ? `<span class="badge"> · ${d.seats_left} left</span>` : ""}
+      </span>
+    </div>`).join("");
+  return `
+    <article class="card">
+      <div class="top">
+        <span class="emoji">${CONTINENT_EMOJI[r.continent] || "🌍"}</span>
+        <small>${esc(r.destination)} · ${r.days} days</small>
+        <h3>${esc(r.title)}</h3>
+      </div>
+      <div class="body">
+        <p class="desc">${esc(r.short_description)}</p>
+        <div class="meta">
+          <span>${r.rating ? `⭐ ${r.rating.toFixed(1)}` : "✨ New"}</span>
+          <span>🗓️ ${r.departures.length} departure${r.departures.length === 1 ? "" : "s"}</span>
+        </div>
+        <div class="types">${r.travel_types.slice(0, 3).map((t) => `<span>${esc(t)}</span>`).join("")}</div>
+        <div class="deps">${deps}</div>
+      </div>
+      <div class="foot">
+        <span class="price">from <b>€${r.from_price_eur}</b></span>
+        <a class="btn primary" href="${esc(r.url)}" target="_blank" rel="noopener">View trip</a>
+      </div>
+    </article>`;
+}
+
+function renderResults(resp) {
+  const box = $("results");
+  if (resp.total > 0) {
+    $("count").textContent = `${resp.total} trip${resp.total === 1 ? "" : "s"} found`;
+    $("count-sub").textContent = "";
+    box.innerHTML = `<div class="cards">${resp.results.map(card).join("")}</div>`;
+    return;
+  }
+
+  $("count").textContent = "No exact matches";
+  $("count-sub").textContent = "but we're close!";
+  const relax = resp.relaxations.map((r, i) => `
+    <button type="button" data-i="${i}">${esc(r.description)} <span>${r.result_count} trip${r.result_count === 1 ? "" : "s"} →</span></button>`).join("");
+  box.innerHTML = `
+    <div class="empty">
+      <div class="big">🧳</div>
+      <h3>Nothing matches every filter</h3>
+      <p>${resp.relaxations.length ? "Try one of these small changes:" : "Try removing some filters."}</p>
+      <div class="relax">${relax}</div>
+    </div>
+    ${resp.closest.length ? `<div class="subhead">Closest options</div><div class="cards">${resp.closest.map(card).join("")}</div>` : ""}`;
+  box.querySelectorAll(".relax button").forEach((b) => {
+    b.onclick = () => { state = resp.relaxations[+b.dataset.i].state; fillForm(); runSearch(); };
+  });
+}
+
+async function runSearch() {
+  if (!validate()) return; // keep the previous results; the fields show what to fix
+  try {
+    const resp = await api("/api/search", state);
+    renderResults(resp);
+  } catch (e) {
+    showFormError(e.message);
+  }
+}
+
+// ---------- chat ----------
+
+function formatReply(text) {
+  return esc(text).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+}
+
+function addMsg(kind, html) {
+  const el = document.createElement("div");
+  el.className = `msg ${kind}`;
+  el.innerHTML = html;
+  $("messages").appendChild(el);
+  $("messages").scrollTop = $("messages").scrollHeight;
+  return el;
+}
+
+async function sendChat(message) {
+  message = message.trim();
+  if (!message) return;
+  readForm();
+  if (!validate()) {
+    addMsg("error", "🙈 Some filters on the left don't add up. Fix the highlighted fields and send again.");
+    return;
+  }
+  $("starters").hidden = true;
+  $("chat-input").value = "";
+  $("send").disabled = true;
+  addMsg("user", esc(message));
+  const typing = addMsg("bot", '<span class="typing"><i></i><i></i><i></i></span>');
+
+  readForm();
+  try {
+    const resp = await api("/api/chat", { message, state, session_id: sessionId });
+    sessionId = resp.session_id;
+    typing.remove();
+    const count = resp.search.total;
+    addMsg("bot", formatReply(resp.reply) +
+      `<span class="info">${count ? `🔎 ${count} trip${count === 1 ? "" : "s"} on the page` : "🔎 no exact matches, see suggestions"}</span>`);
+    state = resp.search.state;
+    fillForm();
+    renderResults(resp.search);
+  } catch (e) {
+    typing.remove();
+    addMsg("error", `😕 ${esc(e.message)}`);
+  } finally {
+    $("send").disabled = false;
+    $("chat-input").focus();
+  }
+}
+
+// ---------- setup ----------
+
+async function init() {
+  try {
+    const meta = await (await fetch("/api/meta")).json();
+    $("f-continents").innerHTML = meta.continents.map((c) =>
+      `<button type="button" class="chip" data-value="${esc(c)}">${CONTINENT_EMOJI[c] || "🌍"} ${esc(c)}</button>`).join("");
+    $("f-continents").querySelectorAll(".chip").forEach((chip) => {
+      chip.onclick = () => {
+        readForm();
+        const v = chip.dataset.value;
+        state.continents = state.continents.includes(v) ? state.continents.filter((x) => x !== v) : [...state.continents, v];
+        fillForm();
+        runSearch();
+      };
+    });
+    $("f-type").innerHTML += meta.travel_types.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+    today = meta.today;
+  } catch (e) {
+    console.error("could not load /api/meta", e);
+  }
+  initDatePicker();
+  fillForm();
+  runSearch();
+}
+
+$("filters").onsubmit = (e) => { e.preventDefault(); readForm(); runSearch(); };
+$("f-sort").onchange = () => { readForm(); runSearch(); };
+["f-from", "f-to", "f-min", "f-max"].forEach((id) => $(id).addEventListener("input", onRangeInput));
+$("f-type").onchange = (e) => {
+  const v = e.target.value;
+  e.target.value = "";
+  if (!v || state.travel_types.includes(v)) return;
+  readForm();
+  state.travel_types = [...state.travel_types, v];
+  fillForm();
+  runSearch();
+};
+$("dates-clear").onclick = () => setDates(null, null);
+$("clear").onclick = () => { state = emptyState(); fillForm(); runSearch(); };
+
+$("composer").onsubmit = (e) => { e.preventDefault(); sendChat($("chat-input").value); };
+$("starters").querySelectorAll(".chip").forEach((c) => { c.onclick = () => sendChat(c.textContent.replace(/^\S+\s/, "")); });
+$("new-chat").onclick = async () => {
+  if (sessionId) await fetch(`/api/chat/${sessionId}/reset`, { method: "POST" }).catch(() => {});
+  sessionId = null;
+  $("messages").innerHTML = '<div class="msg bot">Fresh start! ✨ What kind of trip are you looking for?</div>';
+  $("starters").hidden = false;
+};
+
+init();
+</script>
+</body>
+</html>

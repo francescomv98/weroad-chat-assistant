@@ -1,7 +1,9 @@
 from __future__ import annotations
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from datetime import date
+from pathlib import Path
 from . import service
 from .assistant import Assistant
 from .data import get_catalog
@@ -10,6 +12,12 @@ from .models import SearchResponse, SearchState
 
 app = FastAPI(title="WeRoad search assistant")
 _assistant: Assistant | None = None
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 def get_assistant() -> Assistant:
