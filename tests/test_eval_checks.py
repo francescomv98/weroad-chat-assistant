@@ -1,0 +1,131 @@
+"""The evaluation's own checks: a wrong metric is worse than no metric."""
+import json
+from pathlib import Path
+from app.data import get_catalog
+from evals import checks
+
+BEFORE = {"continents": ["Asia"], "max_price": None, "must_have": [], "moods": {"party": None, "culture": None}, "sort": "relevance"}
+
+
+def test_state_check_counts_right_wrong_and_unasked_changes():
+    after = {**BEFORE, "max_price": 1500, "must_have": ["beach"], "sort": "price", "moods": {"party": 70, "culture": None}}
+    expect = {"max_price": 1500, "must_have": {"contains": "cook"}, "continents": ["Asia"], "moods.party": {"min": 60}}
+
+    result = checks.check_state(BEFORE, after, expect, allow=["sort"])
+
+    # max_price and party are right (tp=2); must_have changed to the wrong value (fp=1, fn=1);
+    # sort changed but is allowed; continents was kept, which is correct but not a "change".
+    assert (result.tp, result.fp, result.fn) == (2, 1, 1)
+    assert not result.ok
+    assert result.problems == ["must_have: got ['beach'], expected {'contains': 'cook'}"]
+
+
+def test_unasked_change_is_a_mistake():
+    after = {**BEFORE, "continents": []}
+    result = checks.check_state(BEFORE, after, {"max_price": None})
+    assert result.fp == 1 and not result.ok
+    assert "continents: changed without being asked" in result.problems[0]
+
+
+def test_invented_prices_and_trips():
+    names = checks.trip_names(["Bali 360°: Seminyak and Ubud", "Japan 360°: Tokyo", "Iceland: Northern Lights"])
+    assert names == ["Bali 360°", "Japan 360°"]
+    grounded = checks.readable([json.dumps({"title": "Bali 360°: Seminyak", "from_price_eur": 879})])
+
+    ok = "Bali 360° starts at €879, within your 1,000 euros."
+    assert checks.invented_facts(ok, grounded, "under 1000 euros", names) == []
+    bad = "Japan 360° is only 650€!"
+    assert checks.invented_facts(bad, grounded, "", names) == [
+        "price €650 not returned by any tool", "trip 'Japan 360°' not returned by any tool"
+    ]
+
+
+def test_zero_results_reply_must_point_to_something_concrete():
+    search = {"relaxations": [{"change": "budget up to €1035 (+15%)"}], "closest": [{"title": "Bali 360°: Ubud", "from_price_eur": 879}]}
+    names = ["Bali 360°"]
+    assert checks.offers_alternative("With a budget of €1,035 there are options.", search, names)
+    assert checks.offers_alternative("Bali 360° is the closest match.", search, names)
+    assert not checks.offers_alternative("Sorry, nothing found.", search, names)
+
+
+def test_zero_results_counts_how_many_trips_a_suggestion_brings_back():
+    # A real gpt-4.1-mini reply that the first version of the check wrongly failed.
+    search = {"relaxations": [{"change": "any travel type", "result_count": 17},
+                              {"change": "no budget limit", "result_count": 3}], "closest": []}
+    reply = ("There are no trips with Northern Lights for under 800 euros. Removing the Northern Lights "
+             "requirement yields 17 trips under 800 euros. If the budget is increased, there are 3 trips.")
+    assert checks.offers_alternative(reply, search, [])
+    # Numbers only count as whole numbers: "3" must not match inside a date like 2030.
+    assert not checks.offers_alternative("Nothing until 2030, sorry.", search, [])
+
+
+
+def test_zero_results_recognises_close_trips_by_their_place():
+    # Real gpt-4.1-mini reply, wrongly failed before: it names the trips by city.
+    search = {"relaxations": [], "closest": [{"title": "Athens Weekend: Acropolis, Cape Sounion", "from_price_eur": 339},
+                                             {"title": "Budapest Weekend: The Pearl of the East", "from_price_eur": 329}]}
+    reply = "No 3-day snorkelling trips, but consider Athens (Greece) or Budapest. Drop the snorkelling?"
+    assert checks.offers_alternative(reply, search, [])
+    assert not checks.offers_alternative("No 3-day snorkelling trips, sorry.", search, [])
+
+
+def test_zero_results_recognises_close_trips_by_their_country():
+    # Real gpt-4.1-mini reply that still failed after the city fix: it names countries.
+    search = {"relaxations": [], "closest": [{"title": "Athens Weekend: Acropolis", "destination": "Greece"},
+                                             {"title": "Copenhagen Weekend: Hygge", "destination": "Denmark"}]}
+    reply = "The closest options are 3-day weekend trips in Greece, Denmark and Hungary, without snorkelling."
+    assert checks.offers_alternative(reply, search, [])
+
+
+def test_changing_the_order_is_never_a_mistake_unless_a_sort_is_expected():
+    after = {**BEFORE, "max_price": 800, "sort": "price"}
+    assert checks.check_state(BEFORE, after, {"max_price": 800}).ok
+    assert not checks.check_state(BEFORE, after, {"max_price": 800, "sort": "rating"}).ok
+
+def test_any_of_several_right_answers_is_accepted():
+    after = {**BEFORE, "must_have": ["northern lights"]}
+    alternatives = [{"travel_types": {"contains": "Northern Lights"}}, {"must_have": {"contains": "northern light"}}]
+    result = checks.check_state_any(BEFORE, after, alternatives, allow=["travel_types", "must_have"])
+    assert result.ok and result.tp == 1
+
+
+def test_percentile_and_f1():
+    assert checks.percentile([100, 200, 300, 400], 50) == 200
+    assert checks.percentile(list(range(1, 101)), 99) == 99
+    assert checks.prf(8, 2, 0) == (0.8, 1.0, 0.888888888888889)
+    assert checks.prf(0, 3, 2) == (0.0, 0.0, 0.0)
+
+
+def test_scenarios_only_use_real_values():
+    """A typo in scenarios.json would silently make a scenario impossible to pass."""
+    catalog = get_catalog()
+    scenarios = json.loads(Path("evals/scenarios.json").read_text(encoding="utf-8"))["scenarios"]
+    assert len({s["id"] for s in scenarios}) == len(scenarios)
+    for s in scenarios:
+        for turn in s["turns"]:
+            blocks = turn.get("expect_any") or [turn.get("expect", {})]
+            for name, spec in [item for block in blocks for item in block.items()]:
+                if name in ("continents", "destinations") and isinstance(spec, list):
+                    pool = catalog.continents if name == "continents" else catalog.destinations
+                    assert set(spec) <= set(pool), (s["id"], spec)
+                if name == "travel_types" and isinstance(spec, dict) and "contains" in spec:
+                    assert any(spec["contains"].lower() in t.lower() for t in catalog.travel_types), (s["id"], spec)
+
+
+def test_made_up_trips_are_caught_but_real_titles_and_labels_are_not():
+    catalog = get_catalog()
+    names = checks.trip_names([t.title for t in catalog.trips])
+    catalog_text = " ".join([t.search_blob for t in catalog.trips] + catalog.travel_types + catalog.destinations)
+
+    # Real gpt-4o-mini reply: these trips don't exist.
+    invented = ("Here are the three trips:\n1. **Gastronomic Adventure in Italy**: hands-on cooking classes.\n"
+                "2. **Culinary Journey in Thailand**: street food tours.")
+    assert checks.made_up_titles(invented, "", names, catalog_text) == [
+        "Gastronomic Adventure in Italy", "Culinary Journey in Thailand"
+    ]
+
+    # Real titles (even shortened), labels, dates and travel types are fine.
+    fine = ('1. **Egypt 360°: Pyramids of Giza, Night Train to Aswan & the Red Sea**\n'
+            '   - **Starting Price**: €1049\n   - **Next Departures**: **December 2 to December 10, 2026**\n'
+            'The closest is "Transylvania Express", or a **Northern Lights** trip like **Bali 360° with a cooking class**.')
+    assert checks.made_up_titles(fine, "", names, catalog_text) == []
