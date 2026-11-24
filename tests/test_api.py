@@ -1,10 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
-from app import main
+from app import main, service
 from app.assistant import Assistant
 from app.data import get_catalog
 from app.llm import LLMProviderError
 from tests.conftest import TODAY
+from tests.test_integration import FrozenDate
 
 
 @pytest.fixture
@@ -16,7 +17,8 @@ def test_every_sample_trip_has_a_known_continent():
     assert "Other" not in get_catalog().continents
 
 
-def test_empty_search_returns_bookable_trips(client):
+def test_empty_search_returns_bookable_trips(client, monkeypatch):
+    monkeypatch.setattr(service, "date", FrozenDate)
     body = client.post("/api/search", json={}).json()
     assert body["total"] == len(body["results"]) > 0
 
