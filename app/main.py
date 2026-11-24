@@ -1,0 +1,63 @@
+from __future__ import annotations
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from datetime import date
+from . import service
+from .assistant import Assistant
+from .data import get_catalog
+from .llm import LLMProviderError
+from .models import SearchResponse, SearchState
+
+app = FastAPI(title="WeRoad search assistant")
+_assistant: Assistant | None = None
+
+
+def get_assistant() -> Assistant:
+    global _assistant
+    if _assistant is None: 
+        _assistant = Assistant()
+    return _assistant
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    state: SearchState = Field(default_factory=SearchState)
+    session_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    search: SearchResponse
+    meta: dict
+
+
+@app.get("/api/meta")
+def meta() -> dict:
+    catalog = get_catalog()
+    return {
+        "today": date.today().isoformat(),
+        "continents": catalog.continents,
+        "destinations": catalog.destinations,
+        "travel_types": catalog.travel_types
+    }
+
+
+@app.post("/api/search", response_model=SearchResponse)
+def search(state: SearchState) -> SearchResponse:
+    return service.search(state)
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+def chat(req: ChatRequest) -> ChatResponse:
+    try:
+        turn = get_assistant().chat(req.message, req.state, req.session_id)
+    except LLMProviderError as e:
+        raise HTTPException(e.status, e.message)
+    return ChatResponse(session_id=turn.session_id, reply=turn.reply, search=turn.search, meta=turn.meta)
+
+
+@app.post("/api/chat/{session_id}/reset")
+def reset(session_id: str) -> dict:
+    get_assistant().reset(session_id)
+    return {"ok": True}
