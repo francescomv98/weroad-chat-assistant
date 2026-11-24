@@ -218,6 +218,52 @@ def made_up_titles(reply: str, known_text: str, names: list[str], catalog_text: 
     return out
 
 
+def faq_titles_returned(tool_outputs: list[str]) -> list[str]:
+    """Titles of the FAQs the FAQ tool returned (in one turn)."""
+    titles = []
+    for content in tool_outputs:
+        try:
+            data = json.loads(content)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(data, dict):
+            titles += [f.get("title", "") for f in data.get("faqs", [])]
+    return titles
+
+
+# Ways a reply admits the FAQs don't cover a question (English and Italian).
+NO_ANSWER_MARKERS = (
+    "don't have", "do not have", "couldn't find", "could not find", "can't find", "no information",
+    "not sure", "don't know", "unable to find", "not covered", "isn't covered", "no specific",
+    "not able to find", "doesn't cover", "does not cover", "non ho", "non trovo", "non so",
+    "non ho trovato", "nessuna informazione",
+    # Seen in real gpt-4.1-mini replies: "I didn't find specific information...", "The FAQ doesn't mention...",
+    # "...but not specifically about tap water".
+    "didn't find", "did not find", "doesn't mention", "does not mention", "not specifically",
+    "not mentioned", "no faq", "non è presente", "non ci sono informazioni",
+)
+
+
+def check_faq(spec: dict | None, returned: list[str], reply: str, titles_by_id: dict[int, str]):
+    """FAQ retrieval: did the tool return one of the expected FAQs in this turn?
+    For questions no FAQ answers: does the reply say so instead of making up a policy?
+    Returns (found, admitted, problems); None where the check doesn't apply."""
+    if not spec:
+        return None, None, []
+    found = admitted = None
+    problems = []
+    if "ids" in spec:
+        wanted = [titles_by_id[i] for i in spec["ids"]]
+        found = any(t in returned for t in wanted)
+        if not found:
+            problems.append(f"expected FAQ {wanted[0]!r}, got {returned or 'no FAQ'}")
+    if spec.get("none"):
+        admitted = any(m in reply.lower().replace("’", "'") for m in NO_ANSWER_MARKERS)
+        if not admitted:
+            problems.append("no FAQ answers this, but the reply doesn't say so")
+    return found, admitted, problems
+
+
 def offers_alternative(reply: str, last_search: dict, names: list[str]) -> bool:
     """On zero results, the reply must point to something concrete: a close trip
     or one of the suggested changes, recognised by its numbers: the new budget, or

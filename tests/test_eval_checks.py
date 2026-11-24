@@ -110,6 +110,8 @@ def test_scenarios_only_use_real_values():
                     assert set(spec) <= set(pool), (s["id"], spec)
                 if name == "travel_types" and isinstance(spec, dict) and "contains" in spec:
                     assert any(spec["contains"].lower() in t.lower() for t in catalog.travel_types), (s["id"], spec)
+            faq_ids = {f.id for f in catalog.faqs}
+            assert set(turn.get("faq", {}).get("ids", [])) <= faq_ids, (s["id"], turn["faq"])
 
 
 def test_made_up_trips_are_caught_but_real_titles_and_labels_are_not():
@@ -129,3 +131,35 @@ def test_made_up_trips_are_caught_but_real_titles_and_labels_are_not():
             '   - **Starting Price**: €1049\n   - **Next Departures**: **December 2 to December 10, 2026**\n'
             'The closest is "Transylvania Express", or a **Northern Lights** trip like **Bali 360° with a cooking class**.')
     assert checks.made_up_titles(fine, "", names, catalog_text) == []
+
+
+
+def test_faq_retrieval_is_judged_on_the_faqs_returned():
+    titles = {1: "Are flights included?", 8: "Can I get a refund if I cancel?", 4: "Can I cancel my booking?"}
+    returned = checks.faq_titles_returned([json.dumps({"faqs": [{"title": "Can I cancel my booking?"}]}),
+                                           json.dumps({"result_count": 3})])  # other tools are ignored
+    assert returned == ["Can I cancel my booking?"]
+
+    assert checks.check_faq({"ids": [8, 4]}, returned, "...", titles) == (True, None, [])
+    found, _, problems = checks.check_faq({"ids": [1]}, returned, "...", titles)
+    assert not found and problems == ["expected FAQ 'Are flights included?', got ['Can I cancel my booking?']"]
+    assert checks.check_faq(None, returned, "...", titles) == (None, None, [])
+
+
+def test_questions_no_faq_answers_must_be_admitted():
+    no_answer = {"none": True}
+    assert checks.check_faq(no_answer, [], "I don’t have information about visas for India.", {})[1]
+    assert checks.check_faq(no_answer, [], "Non ho trovato informazioni sui visti.", {})[1]
+    # Making up a policy is exactly what this check is for.
+    assert not checks.check_faq(no_answer, [], "Yes, you need an e-visa, it costs $25.", {})[1]
+
+
+def test_real_replies_that_admit_the_faqs_dont_cover_it():
+    # The four gpt-4.1-mini replies the first version of the check wrongly failed.
+    replies = [
+        "I found info about internet but not specifically about tap water safety in Mexico in WeRoad's FAQs.",
+        "The FAQ doesn't mention tap water safety in Mexico.",
+        "I didn't find specific information about visa requirements for India in our FAQs.",
+        "I found information on payment methods and currency in India, but not specifically on visa requirements.",
+    ]
+    assert all(checks.check_faq({"none": True}, [], r, {})[1] for r in replies)
