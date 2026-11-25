@@ -249,7 +249,7 @@ class AnthropicClient:
             try:
                 self._client = anthropic.Anthropic(timeout=settings.llm_timeout_s)
             except anthropic.AnthropicError as e:
-                raise LLMProviderError(500, "No Anthropic credentials: set ANTHROPIC_API_KEY in .env") from e
+                raise LLMProviderError(500, "No Anthropic credentials: set ANTHROPIC_API_KEY, or log in with `ant auth login`") from e
         return self._client
 
     def create(self, *, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:

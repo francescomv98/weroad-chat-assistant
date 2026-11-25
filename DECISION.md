@@ -250,7 +250,8 @@ chats non-stop, so N users = N turns in flight:
   ~2.4 s), not in the model. A background warm-up at startup (`app/main.py`, `WARMUP=0` turns it off)
   loads them while the page already answers: first chat 2.87 s on a real server. `/api/meta` says when
   it's done: `run.py` opens the browser only then, and a page opened earlier keeps Send disabled with a
-  note until it is.
+  note until it is. In the Docker image the same warm-up takes 3.3 s (Linux, no per-file scan): ready
+  in ~4 s, first chat 2.77 s.
 - **Not measured here:** the provider. Its limit comes from arithmetic: tokens per turn from the eval ×
   turns per minute, against the plan's published rate limits.
 
@@ -287,6 +288,7 @@ Langfuse Cloud (EU), grouped in a session per conversation (`app/tracing.py`).
 |---|---|
 | Auth, booking, real WeRoad APIs | Not required; the assistant ends on the trip URL |
 | Session persistence | Sessions live in memory (`MemorySessionStore`): dropped after 1 h idle, at most 5,000, least recently used first, so memory stays bounded (~200 MB at most: a 10-turn chat is ~17 KB, ~20-40 KB with Claude's thinking blocks). A restart or an expired session forgets the chat, not the search: the page sends it with every message. The page keeps the search in the URL (reload, Back/Forward, shareable links) and the chat in the tab's sessionStorage (survives a reload, gone with the tab: no login, so nothing outlives it). Redis in production: same get/save/delete interface, history as JSON, an expiry per key; it is what lets `--workers N` and several servers share sessions (today each process has its own) |
+| Several processes or servers | The Docker image runs one uvicorn process: sessions live in its memory, so workers wouldn't share them. Redis for sessions first, then `--workers N` or more containers behind a load balancer (~18.5 turns/s each, see Capacity) |
 | A cap on one conversation's length | The expiry and the cap bound how many conversations are kept and for how long, not how long one gets: every turn sends the whole history to the model (a 10-turn chat is ~17 KB), so a very long chat makes each of its turns slower and more expensive and could exceed the model's context window. Search chats are a few turns, so not needed for the prototype. Production: keep the last N turns, or summarise the older ones into a short note |
 | Streaming replies | p50 is ~2 s; streaming is the first UX improvement for production |
 | Semantic search over trips | Filters handled the vague requests I tried (see above) |

@@ -1,0 +1,7 @@
+# Only what the image needs, listed explicitly: anything new (.env, venv/, logs/, eval results, .git)
+# stays out by default, so a secret can't end up in the image by accident.
+*
+!requirements.txt
+!app/
+!samples/
+**/__pycache__

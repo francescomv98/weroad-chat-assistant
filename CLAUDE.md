@@ -24,8 +24,29 @@ venv\Scripts\python.exe -m evals.run --faq-retrievers index embeddings
 venv\Scripts\python.exe -m evals.load                     # load test with the fake LLM: free, ~1.5 min
 ```
 
-`.env` needs `ANTHROPIC_API_KEY` (the chat, default provider) and `OPENAI_API_KEY` (FAQ embeddings, and the chat
-with `LLM_PROVIDER=openai`); `LANGFUSE_*` keys are optional. Settings live in `app/config.py`
+Docker (Docker Desktop running; keys passed at run time, never in the image):
+
+```powershell
+docker build -t weroad-chat .
+docker run -p 8000:8000 --env-file .env -e ANTHROPIC_API_KEY weroad-chat
+```
+
+Then open http://localhost:8000 (the browser doesn't open by itself: the container can't start programs on the host).
+
+- **Credentials** are read at `docker run`, never stored in the image: `.env` is passed by `--env-file`, and
+  `-e ANTHROPIC_API_KEY` copies the key from the shell if it is set there instead of in `.env`.
+- **With an `ant auth login` profile** instead of a key, pass a short-lived token (PowerShell only: cmd doesn't
+  run `$( )`), and start the container again with a new one when it expires:
+  `docker run -p 8000:8000 --env-file .env -e "ANTHROPIC_AUTH_TOKEN=$(ant auth print-credentials --access-token)" weroad-chat`.
+  Mounting the profile folder doesn't work: files shared from Windows are writable by everyone, and the SDK
+  refuses them as credentials.
+- **Port 8000 busy** (another project, or `run.py`)? Map another one: `-p 8080:8000`, then http://localhost:8080.
+- `.dockerignore` lists what goes in the image (app, samples, requirements); everything else, `.env` included,
+  stays out. One process only: sessions are in its memory.
+
+Credentials: Claude (the chat, default provider) from `ANTHROPIC_API_KEY` or, without it, an `ant auth login`
+profile, which the SDK finds by itself; `OPENAI_API_KEY` in `.env` (FAQ embeddings, and the chat with
+`LLM_PROVIDER=openai`); `LANGFUSE_*` keys are optional. Settings live in `app/config.py`
 (`LLM_PROVIDER`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `FAQ_RETRIEVER`, ...).
 
 ## Architecture
