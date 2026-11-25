@@ -13,12 +13,14 @@ ALWAYS_ALLOWED = {"text_match", "sort"}
 # STATE
 
 def flatten(state: dict) -> dict:
-    """SearchState as flat fields; each mood becomes its own field (moods.party...)."""
+    """SearchState as flat fields; each mood becomes its own field (moods.party...).
+    A mood minimum of 0 filters nothing, so it counts as not set: clearing it is not a change."""
     out = {}
     for key, value in state.items():
         if key == "moods":
             for mood, score in (value or {}).items():
-                out[f"moods.{mood}"] = score
+                if score:
+                    out[f"moods.{mood}"] = score
         else:
             out[key] = value
             

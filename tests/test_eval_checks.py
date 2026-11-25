@@ -190,3 +190,15 @@ def test_real_replies_that_admit_the_faqs_dont_cover_it():
 
 def test_search_faqs_counts_as_the_faq_tool():
     assert checks.check_tools(["search_faqs"], {"must": ["get_faqs"], "must_not": ["update_search"]}) == []
+
+
+def test_a_mood_minimum_of_zero_counts_as_not_set():
+    """Real gpt-4.1-mini turn: it cleared moods it had set to 0, which changes no result."""
+    zeros = {"moods": {"party": 0, "relax": 0, "nature": 0, "culture": 0, "history": 0}}
+    after = {"moods": {"party": None, "relax": None, "nature": None, "culture": None, "history": None},
+             "physical_ratings": ["LOW"]}
+
+    result = checks.check_state(zeros, after, {"physical_ratings": {"contains": "LOW"}})
+
+    assert result.ok, result.problems
+    assert not checks.check_state({"moods": {"party": 60}}, {"moods": {"party": None}}, {}).ok
