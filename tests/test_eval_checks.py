@@ -160,6 +160,16 @@ def test_real_replies_that_admit_the_faqs_dont_cover_it():
         "I found info about internet but not specifically about tap water safety in Mexico in WeRoad's FAQs.",
         "The FAQ doesn't mention tap water safety in Mexico.",
         "I didn't find specific information about visa requirements for India in our FAQs.",
+        "I found information about the plugs used in Japan but not specific weather details.",
+        "I found information about tipping in Morocco, but nothing specific about plugs.",
+        "WeRoad's FAQs do not explicitly mention travel insurance requirements.",
+        "I found information about the type of plugs used in Japan, but not on the weather.",
+        "In Morocco, the answer about plugs is not in the FAQ I accessed.",
+        "The FAQs do not specify if dogs are allowed on WeRoad trips.",
         "I found information on payment methods and currency in India, but not specifically on visa requirements.",
     ]
     assert all(checks.check_faq({"none": True}, [], r, {})[1] for r in replies)
+
+
+def test_search_faqs_counts_as_the_faq_tool():
+    assert checks.check_tools(["search_faqs"], {"must": ["get_faqs"], "must_not": ["update_search"]}) == []

@@ -106,7 +106,12 @@ def check_state_any(before: dict, after: dict, alternatives: list[dict], allow=(
 
 # TOOLS
 
+# Scenarios name the FAQ tool "get_faqs"; with embedding retrieval the same job is done by "search_faqs".
+TOOL_ALIASES = {"search_faqs": "get_faqs"}
+
+
 def check_tools(called: list[str], spec: dict) -> list[str]:
+    called = [TOOL_ALIASES.get(t, t) for t in called]
     problems = [f"did not call {t}" for t in spec.get("must", []) if t not in called]
     problems += [f"called {t}" for t in spec.get("must_not", []) if t in called]
     max_calls = spec.get("max_calls", 4)
@@ -241,6 +246,11 @@ NO_ANSWER_MARKERS = (
     # "...but not specifically about tap water".
     "didn't find", "did not find", "doesn't mention", "does not mention", "not specifically",
     "not mentioned", "no faq", "non è presente", "non ci sono informazioni",
+    # "...not specific weather details", "...nothing specific about plugs", "do not explicitly mention travel insurance".
+    "not specific", "nothing specific", "not explicitly", "do not mention",
+    # "...but not on the weather", "...but not about the plugs", "is not in the FAQ", "don't specifically mention".
+    "but not on the", "but not the", "but not about", "not in the faq", "did not have specific",
+    "don't specifically", "do not specify",
 )
 
 

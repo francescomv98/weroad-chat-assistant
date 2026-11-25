@@ -8,7 +8,8 @@
     "expect_any: a list of 'expect' blocks when more than one answer is right (the closest one is scored).",
     "allow: fields the model may change freely (otherwise any other change counts as a mistake).",
     "results: 'some' or 'none' after the turn. tools: must / must_not / max_calls (default 4).",
-    "reply_excludes: text that must never appear in the reply."
+    "reply_excludes: text that must never appear in the reply.",
+    "faq: {ids: [...]} the FAQ tool must return one of these FAQs in that turn; {none: true} no FAQ answers it and the reply must say so."
   ],
   "scenarios": [
     {
@@ -546,6 +547,362 @@
           "user": "do I need a visa to travel to India?",
           "tools": {"must_not": ["update_search"]},
           "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-body-english",
+      "category": "faq_body_only",
+      "turns": [
+        {
+          "user": "do the people in the group speak English?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [9]}
+        }
+      ]
+    },
+    {
+      "id": "faq-body-bathroom",
+      "category": "faq_body_only",
+      "turns": [
+        {
+          "user": "will I have a private bathroom?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [15]}
+        }
+      ]
+    },
+    {
+      "id": "faq-body-group-size",
+      "category": "faq_body_only",
+      "turns": [
+        {
+          "user": "how many people are usually in a group?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [9]}
+        }
+      ]
+    },
+    {
+      "id": "faq-zero-deposit",
+      "category": "faq_paraphrase",
+      "turns": [
+        {
+          "user": "what is this zero euro deposit thing?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [3]}
+        }
+      ]
+    },
+    {
+      "id": "faq-open-to-book",
+      "category": "faq_paraphrase",
+      "turns": [
+        {
+          "user": "the departure says 'open to book', does that mean it's confirmed?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [7]}
+        }
+      ]
+    },
+    {
+      "id": "faq-who-is-coming",
+      "category": "faq_paraphrase",
+      "turns": [
+        {
+          "user": "can I check who else is coming before I pay?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [10]}
+        }
+      ]
+    },
+    {
+      "id": "faq-sleep-in-listed-town",
+      "category": "faq_paraphrase",
+      "turns": [
+        {
+          "user": "is it guaranteed we sleep in the towns listed in the itinerary?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [12]}
+        }
+      ]
+    },
+    {
+      "id": "faq-coordinate-flights",
+      "category": "faq_paraphrase",
+      "turns": [
+        {
+          "user": "how can I take the same flight as the others in my group?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [6]}
+        }
+      ]
+    },
+    {
+      "id": "faq-community",
+      "category": "faq_paraphrase",
+      "turns": [
+        {
+          "user": "once the trip is over, is there a community I can stay part of?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [14]}
+        }
+      ]
+    },
+    {
+      "id": "faq-ecuador-money",
+      "category": "faq_destination",
+      "start": {"destinations": ["Ecuador"]},
+      "turns": [
+        {
+          "user": "do I need to change money there?",
+          "expect": {"destinations": ["Ecuador"]},
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [28]}
+        }
+      ]
+    },
+    {
+      "id": "faq-egypt-sim",
+      "category": "faq_destination",
+      "turns": [
+        {
+          "user": "is wifi good in Egypt or should I get a local SIM?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [29]}
+        }
+      ]
+    },
+    {
+      "id": "faq-greece-charger",
+      "category": "faq_destination",
+      "turns": [
+        {
+          "user": "will my charger work in Greece?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [31]}
+        }
+      ]
+    },
+    {
+      "id": "faq-australia-weather",
+      "category": "faq_destination",
+      "start": {"destinations": ["Australia"]},
+      "turns": [
+        {
+          "user": "what's the weather like there in January?",
+          "expect": {"destinations": ["Australia"]},
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [18]}
+        }
+      ]
+    },
+    {
+      "id": "faq-france-service",
+      "category": "faq_destination",
+      "turns": [
+        {
+          "user": "is service included in restaurant bills in France?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [30]}
+        }
+      ]
+    },
+    {
+      "id": "faq-it-change-dates",
+      "category": "faq_italian",
+      "turns": [
+        {
+          "user": "posso cambiare le date dopo aver prenotato?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [2]}
+        }
+      ]
+    },
+    {
+      "id": "faq-it-share-room",
+      "category": "faq_italian",
+      "turns": [
+        {
+          "user": "dovrò dividere la camera con altre persone?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [15]}
+        }
+      ]
+    },
+    {
+      "id": "faq-it-japan-plugs",
+      "category": "faq_italian",
+      "turns": [
+        {
+          "user": "che prese elettriche usano in Giappone?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [39]}
+        }
+      ]
+    },
+    {
+      "id": "faq-es-costa-rica-currency",
+      "category": "faq_other_language",
+      "turns": [
+        {
+          "user": "¿Qué moneda se usa en Costa Rica?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [24]}
+        }
+      ]
+    },
+    {
+      "id": "faq-fr-flights",
+      "category": "faq_other_language",
+      "turns": [
+        {
+          "user": "Est-ce que les vols sont inclus dans le prix ?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [1]}
+        }
+      ]
+    },
+    {
+      "id": "faq-de-iceland-weather",
+      "category": "faq_other_language",
+      "turns": [
+        {
+          "user": "Wie ist das Wetter in Island?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [34]}
+        }
+      ]
+    },
+    {
+      "id": "faq-near-japan-weather",
+      "category": "faq_near_miss",
+      "turns": [
+        {
+          "user": "what's the weather like in Japan?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-near-thailand-currency",
+      "category": "faq_near_miss",
+      "turns": [
+        {
+          "user": "which currency is used in Thailand?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-near-morocco-plugs",
+      "category": "faq_near_miss",
+      "turns": [
+        {
+          "user": "what plugs do they use in Morocco?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-near-mexico-tips",
+      "category": "faq_near_miss",
+      "turns": [
+        {
+          "user": "do I need to tip in Mexico?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-none-insurance",
+      "category": "faq_no_answer",
+      "turns": [
+        {
+          "user": "do I need travel insurance for the trip?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-none-dog",
+      "category": "faq_no_answer",
+      "turns": [
+        {
+          "user": "can I bring my dog on the trip?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-none-vaccines",
+      "category": "faq_no_answer",
+      "turns": [
+        {
+          "user": "what vaccinations do I need for Tanzania?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-in-search-peru",
+      "category": "faq_multi_turn",
+      "turns": [
+        {
+          "user": "show me trips to Peru",
+          "expect": {"destinations": ["Peru"]},
+          "tools": {"must": ["update_search"]}
+        },
+        {
+          "user": "what currency do they use?",
+          "expect": {"destinations": ["Peru"]},
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [48]}
+        },
+        {
+          "user": "ok, only trips under 2000 euros",
+          "expect": {"destinations": ["Peru"], "max_price": {"min": 1999, "max": 2000}},
+          "tools": {"must": ["update_search"]}
+        }
+      ]
+    },
+    {
+      "id": "faq-in-search-japan",
+      "category": "faq_multi_turn",
+      "turns": [
+        {
+          "user": "I'd like to go to Japan",
+          "expect": {"destinations": ["Japan"]},
+          "tools": {"must": ["update_search"]}
+        },
+        {
+          "user": "what adapter should I pack?",
+          "expect": {"destinations": ["Japan"]},
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [39]}
+        }
+      ]
+    },
+    {
+      "id": "faq-two-questions",
+      "category": "faq_multi_turn",
+      "turns": [
+        {
+          "user": "are flights included?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [1]}
+        },
+        {
+          "user": "and can I cancel if something comes up?",
+          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "faq": {"ids": [4, 8]}
         }
       ]
     }
