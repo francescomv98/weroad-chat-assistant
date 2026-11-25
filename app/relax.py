@@ -27,7 +27,7 @@ def _widen_dates(days: int) -> Callable[[SearchState], SearchState]:
         return s.model_copy(
             update={
                 "date_from": s.date_from - timedelta(days=days) if s.date_from else None,
-                "date_to": s.date_to + timedelta(days=days) if s.date_to else None,
+                "date_to": s.date_to + timedelta(days=days) if s.date_to else None
             }
         )
 
@@ -59,8 +59,8 @@ def candidate_steps(state: SearchState, catalog: Catalog) -> list[_Step]:
                 "trip length ±2 days",
                 _upd(
                     min_days=max(1, state.min_days - 2) if state.min_days else None,
-                    max_days=state.max_days + 2 if state.max_days else None,
-                ),
+                    max_days=state.max_days + 2 if state.max_days else None
+                )
             )
         )
         steps.append(_Step("days", 5, "any trip length", _upd(min_days=None, max_days=None)))

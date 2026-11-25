@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from pathlib import Path
 from app import assistant as assistant_module
+from app import tracing
 from app.assistant import Assistant, summarise_for_model
 from app.config import Settings, settings
 from app.data import get_catalog
@@ -50,7 +51,7 @@ def warm_up(label: str, client: LLMClient, faq_retrievers: list[str]) -> None:
 
 
 def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names: list[str], catalog_text: str,
-                 faq_retriever: str = "embeddings") -> list[dict]:
+                 faq_retriever: str = "embeddings", run_id: str = "") -> list[dict]:
     bot = Assistant(llm=client, catalog=get_catalog(), today=FROZEN_TODAY, faq_retriever=faq_retriever)
     state = SearchState.model_validate(scenario.get("start", {}))
     session_id = None
@@ -70,8 +71,13 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         user_text += " " + turn["user"]
         before = state.model_dump(mode="json")
         history_len = len(bot.sessions[session_id].messages) if session_id else 0
+        # With --langfuse, the turn's trace is tagged so it can be found by run, model and category.
+        eval_tags = [f"eval-run:{run_id}", f"model:{label}", f"category:{scenario['category']}"]
+        eval_meta = {"eval_run": run_id, "scenario": scenario["id"], "category": scenario["category"],
+                     "model_variant": label, "run": str(run + 1), "turn": str(i + 1)}
         try:
-            result = bot.chat(turn["user"], state, session_id)
+            with tracing.context(eval_tags, eval_meta):
+                result = bot.chat(turn["user"], state, session_id)
         except Exception as e:  
             rec["error"] = f"{type(e).__name__}: {e}"
             records.append(rec)
@@ -98,9 +104,27 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         rec.update(faq_found=found, faq_admitted=admitted)
         rec["problems"] += faq_problems
         rec["correct"] = rec["correct"] and not faq_problems
+        rec["trace_id"] = result.meta.get("trace_id")
+        send_scores(rec)
         records.append(rec)
 
     return records
+
+
+def send_scores(rec: dict) -> None:
+    """The checks' verdicts on the turn's Langfuse trace (no-op without --langfuse): filter `correct = 0`
+    in Langfuse and open the trace to see what the model saw and did."""
+    trace_id = rec.get("trace_id")
+    if not trace_id:
+        return
+    tracing.score(trace_id, "correct", rec["correct"], "; ".join(rec["problems"]) or None)
+    tracing.score(trace_id, "tools_ok", rec["tools_ok"])
+    tracing.score(trace_id, "grounded", not rec["invented"], "; ".join(rec["invented"]) or None)
+    if rec["has_expect"]:
+        tracing.score(trace_id, "state_ok", rec["state_ok"])
+    for name in ("zero_ok", "faq_found", "faq_admitted"):
+        if rec.get(name) is not None:
+            tracing.score(trace_id, {"zero_ok": "zero_results_handled"}.get(name, name), rec[name])
 
 
 def expectations(turn: dict) -> list[dict]:
@@ -296,7 +320,13 @@ def main() -> None:
     parser.add_argument("--only", default="", help="comma-separated scenario ids or categories")
     parser.add_argument("--faq-retrievers", nargs="+", default=[settings.faq_retriever], choices=["index", "embeddings"],
                         help="FAQ retrieval to compare: the model picks from the FAQ index, or embedding search")
+    parser.add_argument("--langfuse", action="store_true",
+                        help="send a trace of every turn to Langfuse (environment 'eval'); needs the LANGFUSE_* keys")
     args = parser.parse_args()
+    tracing.configure(enabled=args.langfuse, environment="eval")
+    if args.langfuse and not tracing.enabled():
+        sys.exit("--langfuse: tracing could not start (see the message above): check that the LANGFUSE_* keys are in "
+                 r"your .env and that you are using the project's venv (venv\Scripts\python.exe)")
 
     scenarios = json.loads((HERE / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
     if args.only:
@@ -327,7 +357,7 @@ def main() -> None:
 
     records: list[dict] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for recs in pool.map(lambda job: run_scenario(job[0], job[1], job[2], job[3], names, catalog_text, job[4]), jobs):
+        for recs in pool.map(lambda job: run_scenario(job[0], job[1], job[2], job[3], names, catalog_text, job[4], out_dir.name), jobs):
             records += recs
             r = recs[0]
             mark = "ok " if all(x.get("correct") for x in recs) else "ERR" if any(x.get("error") for x in recs) else "x  "
@@ -342,6 +372,9 @@ def main() -> None:
     (out_dir / "report.md").write_text(report, encoding="utf-8")
     print("\n" + report)
     print(f"Saved to {out_dir}")
+    if args.langfuse:
+        tracing.flush()
+        print(f"Traces and scores sent to Langfuse: environment 'eval', tag 'eval-run:{out_dir.name}'")
 
 
 if __name__ == "__main__":

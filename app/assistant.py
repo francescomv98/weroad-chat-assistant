@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import ValidationError
 from . import service
 from . import config
+from . import tracing
 from .config import settings
 from .data import Catalog, get_catalog
 from .faq_embeddings import EmbedFn, FaqEmbeddingIndex
@@ -71,6 +72,25 @@ def summarise_for_model(resp: SearchResponse) -> dict:
         out["closest"] = [_compact_trip(r) for r in resp.closest[:TOP_N_FOR_MODEL]]
 
     return out
+
+
+def outcome_tags(result: TurnResult) -> list[str]:
+    """How the turn ended for the user, as trace tags, so Langfuse dashboards can count the product
+    metrics in DECISION.md (zero-result searches, FAQ questions, errors) on real traffic."""
+    called = result.meta["tool_calls"]
+    tags = []
+    if result.meta.get("searched"):  # only a search that ran: a failed one leaves the page as it was
+        if result.search.total:
+            tags.append("outcome:results")
+        else:
+            tags.append("outcome:zero-results-with-suggestions" if result.search.relaxations else "outcome:zero-results")
+    if any(name in ("get_faqs", "search_faqs") for name in called):
+        tags.append("faq")
+    if not called:
+        tags.append("no-tools")  # a question back to the user, off-topic, or an answer from earlier results
+    if result.meta.get("tool_errors"):
+        tags.append("tool-error")
+    return tags
 
 
 def _add_years(d: date, years: int) -> date:
@@ -226,11 +246,31 @@ class Assistant:
         self.sessions[session.id] = session
         history_len = len(session.messages)
 
-        try:
-            return self._turn(session, message, state)
-        except Exception:
-            del session.messages[history_len:]
-            raise
+        trace_meta = {
+            "provider": getattr(self.llm, "provider", "unknown"), "model": self.llm.model,
+            "faq_retriever": self.faq_retriever
+        }
+        with tracing.turn(session.id, message, trace_meta) as trace:
+            try:
+                result = self._turn(session, message, state)
+                result.meta["trace_id"] = tracing.current_trace_id()
+                tracing.add_tags(outcome_tags(result))
+            except Exception:
+                del session.messages[history_len:]
+                raise
+            trace.update(
+                output=result.reply,
+                metadata={
+                    "search_before": state.model_dump(mode="json", exclude_defaults=True),
+                    "search_after": result.search.state.model_dump(mode="json", exclude_defaults=True),
+                    "result_count": result.search.total,
+                    "tool_calls": result.meta["tool_calls"],
+                    "latency_ms": result.meta["latency_ms"],
+                    "usage": result.meta["usage"],
+                    "cost_usd": result.meta["cost_usd"]
+                }
+            )
+        return result
 
     def _turn(self, session: Session, message: str, state: SearchState) -> TurnResult:
         messages = session.messages
@@ -239,12 +279,24 @@ class Assistant:
         started = time.perf_counter()
         usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "embedding_tokens": 0}
         tool_calls: list[str] = []
+        tool_errors = 0
+        searched = False  # an update_search that changed the page
         # The arguments too, not only the names: a wrong FAQ is often a badly written query.
         tool_inputs: list[dict] = []
         reply = ""
 
+        effort = getattr(self.llm, "effort", None)
         for _round in range(settings.max_tool_rounds):
-            response = self.llm.create(system=self.system, messages=messages, tools=self.tools)
+            with tracing.generation(f"llm-call-{_round + 1}", self.llm.model, tracing.history(messages),
+                                    {"effort": effort} if effort else None) as gen:
+                response = self.llm.create(system=self.system, messages=messages, tools=self.tools)
+                cost = estimate_cost_usd(self.llm.model, response.usage)
+                gen.update(
+                    output={"text": response.text, "stop": response.stop,
+                            "tool_calls": [{"name": c.name, "arguments": c.arguments} for c in response.tool_calls]},
+                    usage_details=tracing.usage_details(response.usage),
+                    cost_details={"total": cost} if cost is not None else None
+                )
             for k, v in response.usage.items():
                 usage[k] = usage.get(k, 0) + v
 
@@ -263,12 +315,16 @@ class Assistant:
             for call in response.tool_calls:
                 tool_calls.append(call.name)
                 tool_inputs.append({"name": call.name, "arguments": call.arguments if call.arguments is not None else call.raw_arguments})
-                if response.stop == "max_tokens":  
-                    content, is_error = json.dumps({"error": "tool input was truncated, try again"}), True
-                elif call.arguments is None:
-                    content, is_error = json.dumps({"error": "arguments were not valid JSON", "received": call.raw_arguments}), True
-                else:
-                    state, content, is_error = self._run_tool(call.name, call.arguments, state, usage)
+                with tracing.tool(call.name, call.arguments if call.arguments is not None else call.raw_arguments) as span:
+                    if response.stop == "max_tokens":  
+                        content, is_error = json.dumps({"error": "tool input was truncated, try again"}), True
+                    elif call.arguments is None:
+                        content, is_error = json.dumps({"error": "arguments were not valid JSON", "received": call.raw_arguments}), True
+                    else:
+                        state, content, is_error = self._run_tool(call.name, call.arguments, state, usage)
+                    span.update(output=tracing.parse_json(content), level="ERROR" if is_error else None)
+                tool_errors += is_error
+                searched = searched or (call.name == "update_search" and not is_error)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": content, "is_error": is_error})
         else:
             reply = "I've updated the search - have a look at the results."
@@ -280,6 +336,8 @@ class Assistant:
             "latency_ms": int((time.perf_counter() - started) * 1000),
             "tool_calls": tool_calls,
             "tool_inputs": tool_inputs,
+            "tool_errors": tool_errors,
+            "searched": searched,
             "usage": usage,
             "cost_usd": estimate_cost_usd(self.llm.model, usage)
         }

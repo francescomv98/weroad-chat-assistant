@@ -202,3 +202,18 @@ def test_a_mood_minimum_of_zero_counts_as_not_set():
 
     assert result.ok, result.problems
     assert not checks.check_state({"moods": {"party": 60}}, {"moods": {"party": None}}, {}).ok
+
+
+def test_the_eval_verdicts_become_langfuse_scores(monkeypatch):
+    from evals import run as eval_run
+
+    sent = []
+    monkeypatch.setattr(eval_run.tracing, "score", lambda trace_id, name, value, comment=None: sent.append((name, value, comment)))
+    rec = {"trace_id": "t1", "correct": False, "problems": ["max_price: got None"], "tools_ok": True, "invented": [],
+           "has_expect": True, "state_ok": False, "zero_ok": None, "faq_found": True, "faq_admitted": None}
+
+    eval_run.send_scores(rec)
+    eval_run.send_scores({**rec, "trace_id": None})  # without --langfuse there is no trace: nothing is sent
+
+    assert sent == [("correct", False, "max_price: got None"), ("tools_ok", True, None), ("grounded", True, None),
+                    ("state_ok", False, None), ("faq_found", True, None)]

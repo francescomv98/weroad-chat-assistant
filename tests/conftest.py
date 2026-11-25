@@ -1,9 +1,16 @@
 from __future__ import annotations
 from datetime import date
 import pytest
+from app import tracing
 from app.data import Catalog, Faq, _parse_trip
 
 TODAY = date(2027, 1, 10)
+
+
+@pytest.fixture(autouse=True)
+def no_tracing():
+    """Tests never send traces, even when the Langfuse keys are in .env."""
+    tracing.configure(enabled=False)
 
 
 def tour(trip_id, n, start, end, price, status="CONFIRMED", seats=5, age="25-35", base=None):

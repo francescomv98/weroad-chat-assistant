@@ -108,6 +108,8 @@ def to_openai_tools(tools: list[dict]) -> list[dict]:
 
 
 class OpenAIClient:
+    provider = "openai"
+
     def __init__(self, model: str | None = None, reasoning_effort: str | None = None) -> None:
         self.model = model or settings.openai_model
         self.effort = reasoning_effort if reasoning_effort is not None else settings.openai_reasoning_effort
@@ -233,6 +235,8 @@ def to_anthropic_messages(messages: list[dict]) -> list[dict]:
 
 
 class AnthropicClient:
+    provider = "anthropic"
+
     def __init__(self, model: str | None = None, effort: str | None = None) -> None:
         self.model = model or settings.anthropic_model
         self.effort = effort if effort is not None else settings.anthropic_effort
