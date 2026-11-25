@@ -15,6 +15,13 @@ class Settings:
     # Off by default: an A/B test in the same time window (80 calls each, alternating) showed no difference
     # (37 vs 34 calls missed the cache entirely). Empty = not sent.
     openai_prompt_cache_key: str = os.getenv("OPENAI_PROMPT_CACHE_KEY", "")
+    # Which LLM runs the assistant: "anthropic" (default, needs ANTHROPIC_API_KEY) or "openai".
+    # Claude Haiku 5.5 at low effort: in eval 20261125-144136 Haiku 5.5 matched gpt-4.1-mini on quality
+    # (172/172 vs 170/172) at less than half the cost per turn; low effort to cut thinking latency.
+    llm_provider: str = os.getenv("LLM_PROVIDER", "anthropic")
+    anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
+    # low | medium | high | xhigh | max; empty = the model's default (medium on Haiku 5.5).
+    anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "low")
     max_tool_rounds: int = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "6"))
     turn_log_path: str = os.getenv("TURN_LOG_PATH", "logs/turns.jsonl")
     # How the model finds FAQs: "embeddings" (it writes a query, FAQs ranked by similarity with

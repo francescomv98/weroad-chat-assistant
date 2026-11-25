@@ -245,15 +245,16 @@ class Assistant:
 
         for _round in range(settings.max_tool_rounds):
             response = self.llm.create(system=self.system, messages=messages, tools=self.tools)
-            for k in ("input_tokens", "cached_input_tokens", "output_tokens"):
-                usage[k] += response.usage.get(k, 0)
+            for k, v in response.usage.items():
+                usage[k] = usage.get(k, 0) + v
 
             if response.stop == "refusal":
                 reply = "Sorry, I can't help with that. I can help you find a WeRoad trip, though!"
                 messages.append({"role": "assistant", "content": reply, "tool_calls": []})
                 break
             messages.append(
-                {"role": "assistant", "content": response.text, "tool_calls": response.tool_calls}
+                {"role": "assistant", "content": response.text, "tool_calls": response.tool_calls,
+                 "provider_content": response.raw_content}
             )
             if not response.tool_calls:
                 reply = response.text.strip()

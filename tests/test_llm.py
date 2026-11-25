@@ -1,5 +1,9 @@
 from types import SimpleNamespace as NS
-from app.llm import OpenAIClient, estimate_cost_usd
+import pytest
+from anthropic.types import Message
+from app import llm
+from app.config import Settings
+from app.llm import AnthropicClient, OpenAIClient, ToolCall, estimate_cost_usd, make_client, to_anthropic_messages
 
 
 def completion(content=None, tool_calls=None, finish="stop", prompt=1000, cached=0, out=50):
@@ -48,3 +52,85 @@ def test_the_prompt_cache_key_is_sent_only_when_set():
 
     assert sent[0]["prompt_cache_key"] == "weroad-search-assistant"
     assert "prompt_cache_key" not in sent[1]
+
+
+# Anthropic
+
+
+def claude_message(content, stop="end_turn", cache_read=0, cache_write=0):
+    return Message.model_validate({
+        "id": "msg_1", "type": "message", "role": "assistant", "model": "claude-haiku-5-5",
+        "content": content, "stop_reason": stop, "stop_sequence": None,
+        "usage": {"input_tokens": 100, "output_tokens": 20,
+                  "cache_read_input_tokens": cache_read, "cache_creation_input_tokens": cache_write},
+    })
+
+
+def test_a_reply_with_thinking_and_a_tool_call_is_parsed_and_kept_whole():
+    resp = AnthropicClient._parse(claude_message([
+        {"type": "thinking", "thinking": "", "signature": "sig"},
+        {"type": "text", "text": "Let me search."},
+        {"type": "tool_use", "id": "tu_1", "name": "update_search", "input": {"continents": ["Asia"]}},
+    ], stop="tool_use", cache_read=1500, cache_write=300))
+
+    assert resp.text == "Let me search." and resp.stop == "tool_use"
+    assert resp.tool_calls[0].name == "update_search" and resp.tool_calls[0].arguments == {"continents": ["Asia"]}
+    assert resp.usage == {"input_tokens": 100, "cached_input_tokens": 1500, "cache_write_input_tokens": 300, "output_tokens": 20}
+    # The thinking block must be replayed unchanged in the next request.
+    assert resp.raw_content["blocks"][0] == {"type": "thinking", "thinking": "", "signature": "sig"}
+
+
+def test_a_refusal_is_reported_as_such():
+    assert AnthropicClient._parse(claude_message([], stop="refusal")).stop == "refusal"
+
+
+def test_the_history_is_converted_to_the_messages_api():
+    call = ToolCall(id="tu_1", name="update_search", arguments={"max_price": 900})
+    raw = {"provider": "anthropic", "blocks": [{"type": "thinking", "thinking": "", "signature": "sig"},
+                                               {"type": "tool_use", "id": "tu_2", "name": "get_trip_details", "input": {"trip_id": 1}}]}
+    history = [
+        {"role": "user", "content": "Japan under 900"},
+        {"role": "assistant", "content": "", "tool_calls": [call], "provider_content": None},
+        {"role": "tool", "tool_call_id": "tu_1", "content": '{"result_count": 0}', "is_error": False},
+        {"role": "assistant", "content": "", "tool_calls": [], "provider_content": raw},
+        {"role": "tool", "tool_call_id": "tu_2", "content": '{"error": "x"}', "is_error": True},
+    ]
+
+    out = to_anthropic_messages(history)
+
+    assert out[1] == {"role": "assistant", "content": [{"type": "tool_use", "id": "tu_1", "name": "update_search", "input": {"max_price": 900}}]}
+    assert out[2] == {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_1", "content": '{"result_count": 0}'}]}
+    assert out[3] == {"role": "assistant", "content": raw["blocks"]}  # replayed as it came, thinking included
+    assert out[4]["content"][0]["is_error"] is True
+
+
+def test_the_request_caches_the_prompt_and_uses_fallbacks_only_where_supported():
+    sent = []
+    create = lambda **kw: sent.append(kw) or claude_message([{"type": "text", "text": "hi"}])
+    fake = NS(messages=NS(create=create), beta=NS(messages=NS(create=create)))
+
+    haiku = AnthropicClient(model="claude-haiku-5-5", effort="low")
+    haiku._client = fake
+    haiku.create(system="s", messages=[{"role": "user", "content": "hi"}], tools=[])
+    opus = AnthropicClient(model="claude-opus-5-5", effort="")
+    opus._client = fake
+    opus.create(system="s", messages=[{"role": "user", "content": "hi"}], tools=[])
+
+    assert sent[0]["cache_control"] == {"type": "ephemeral"} and sent[0]["output_config"] == {"effort": "low"}
+    assert "fallbacks" not in sent[0]
+    assert sent[1]["fallbacks"] == "default" and "output_config" not in sent[1]
+
+
+def test_cache_writes_are_billed_at_one_and_a_quarter_times_input():
+    usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "cache_write_input_tokens": 1_000_000}
+    assert estimate_cost_usd("claude-opus-5-5", usage) == 5.0
+
+
+def test_the_provider_comes_from_settings(monkeypatch):
+    monkeypatch.setattr(llm, "settings", Settings(llm_provider="anthropic"))
+    assert isinstance(make_client(), AnthropicClient)
+    monkeypatch.setattr(llm, "settings", Settings(llm_provider="openai"))
+    assert isinstance(make_client(), llm.OpenAIClient)
+    monkeypatch.setattr(llm, "settings", Settings(llm_provider="mistral"))
+    with pytest.raises(ValueError, match="LLM_PROVIDER"):
+        make_client()

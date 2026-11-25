@@ -10,7 +10,7 @@ from app.assistant import Assistant, summarise_for_model
 from app.config import Settings, settings
 from app.data import get_catalog
 from app.faq_embeddings import FaqEmbeddingIndex
-from app.llm import LLMClient, OpenAIClient
+from app.llm import AnthropicClient, LLMClient, OpenAIClient
 from app.models import SearchState
 from app.prompts import build_tools
 from evals import checks
@@ -21,6 +21,7 @@ HERE = Path(__file__).resolve().parent
 
 PROVIDERS = {
     "openai": lambda model, effort: OpenAIClient(model=model, reasoning_effort=effort or ""),
+    "anthropic": lambda model, effort: AnthropicClient(model=model, effort=effort or ""),
 }
 
 
@@ -203,7 +204,7 @@ def summarize(records: list[dict]) -> dict:
 
 def _cached_share(usages: list[dict]) -> float | None:
     cached = sum(u.get("cached_input_tokens", 0) for u in usages)
-    total = cached + sum(u.get("input_tokens", 0) for u in usages)
+    total = cached + sum(u.get("input_tokens", 0) + u.get("cache_write_input_tokens", 0) for u in usages)
     return cached / total if total else None
 
 
@@ -284,9 +285,12 @@ def render(summaries: dict[str, dict], records: list[dict], args) -> str:
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
-    default_model = settings.openai_model + (f"@{settings.openai_reasoning_effort}" if settings.openai_reasoning_effort else "")
+    if settings.llm_provider == "anthropic":
+        default_model = f"anthropic:{settings.anthropic_model}" + (f"@{settings.anthropic_effort}" if settings.anthropic_effort else "")
+    else:
+        default_model = settings.openai_model + (f"@{settings.openai_reasoning_effort}" if settings.openai_reasoning_effort else "")
     parser = argparse.ArgumentParser(description="Evaluate the assistant on scenarios.json")
-    parser.add_argument("--models", nargs="+", default=[default_model], help="e.g. gpt-4.1-mini openai:gpt-5-mini@low")
+    parser.add_argument("--models", nargs="+", default=[default_model], help="e.g. gpt-4.1-mini openai:gpt-5-mini@low anthropic:claude-haiku-5-5 anthropic:claude-opus-5-5@low")
     parser.add_argument("--runs", type=int, default=2, help="runs per scenario (models aren't deterministic)")
     parser.add_argument("--workers", type=int, default=4, help="parallel scenarios; use 1 for the cleanest latency numbers")
     parser.add_argument("--only", default="", help="comma-separated scenario ids or categories")
