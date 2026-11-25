@@ -249,6 +249,9 @@ Langfuse Cloud (EU), grouped in a session per conversation (`app/tracing.py`).
 | Semantic search over trips | Filters handled the vague requests I tried (see above) |
 | LLM-as-judge for reply quality | Deterministic checks first; a judge for tone/helpfulness would be next |
 | Polished UI | One HTML page that shows the loop |
+| Custom retries, provider fallback | The SDKs already retry twice (429, 5xx, timeouts) and each call times out after 30 s; my own retries would stack on theirs. A silent switch Claude → OpenAI would serve a model with other eval results: `LLM_PROVIDER` switches by hand |
+| Per-user rate limiting, circuit breaker | Needs auth to know who the user is; the 6-round cap already bounds the cost of a turn. First item for production |
+| PII redaction, log retention | Chat text is logged as typed (`logs/turns.jsonl`, Langfuse) and users can type personal data. No form asks for any and the data is fake; in production: retention on Langfuse, its `mask` hook for emails/phones, and drop or rotate the local log |
 
 ## What I'd ship first and how I'd measure it
 

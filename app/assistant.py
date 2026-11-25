@@ -14,7 +14,7 @@ from . import tracing
 from .config import settings
 from .data import Catalog, get_catalog
 from .faq_embeddings import EmbedFn, FaqEmbeddingIndex
-from .llm import LLMClient, estimate_cost_usd, make_client
+from .llm import LLMClient, LLMProviderError, estimate_cost_usd, make_client
 from .models import SearchResponse, SearchState
 from .prompts import build_system_prompt, build_tools
 
@@ -255,8 +255,13 @@ class Assistant:
                 result = self._turn(session, message, state)
                 result.meta["trace_id"] = tracing.current_trace_id()
                 tracing.add_tags(outcome_tags(result))
-            except Exception:
+            except Exception as e:
                 del session.messages[history_len:]
+                if isinstance(e, LLMProviderError):
+                    # The user only sees a generic message and uvicorn only "POST /api/chat 502": put the cause
+                    # where you look first. No user text here, only the provider's error.
+                    log.warning("LLM call failed: session=%s status=%s message=%r cause=%r",
+                                session.id, e.status, e.message, e.__cause__)
                 raise
             trace.update(
                 output=result.reply,

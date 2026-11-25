@@ -1,5 +1,6 @@
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException
+from typing import Annotated
+from fastapi import FastAPI, HTTPException, Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from pathlib import Path
@@ -26,10 +27,15 @@ def get_assistant() -> Assistant:
     return _assistant
 
 
+# The session id comes from the client and ends up in logs and traces: accept only what the server hands
+# out (uuid4 hex) or something like it, so a forged id can't add lines to the log or grow without limit.
+SESSION_ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     state: SearchState = Field(default_factory=SearchState)
-    session_id: str | None = None
+    session_id: str | None = Field(default=None, pattern=SESSION_ID_PATTERN)
 
 
 class ChatResponse(BaseModel):
@@ -65,6 +71,6 @@ def chat(req: ChatRequest) -> ChatResponse:
 
 
 @app.post("/api/chat/{session_id}/reset")
-def reset(session_id: str) -> dict:
+def reset(session_id: Annotated[str, PathParam(pattern=SESSION_ID_PATTERN)]) -> dict:
     get_assistant().reset(session_id)
     return {"ok": True}

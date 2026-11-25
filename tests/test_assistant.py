@@ -117,6 +117,22 @@ def test_failed_turn_leaves_no_half_conversation(catalog):
     assert bot.sessions[first.session_id].messages == history
 
 
+def test_a_provider_error_is_logged_with_its_cause_but_not_the_user_text(catalog, caplog):
+    cause = RuntimeError("Error code: 429 - rate_limit_error")
+    error = LLMProviderError(429, "The assistant is busy, please retry in a moment.")
+    error.__cause__ = cause
+    bot, _ = make(catalog, error)
+
+    with pytest.raises(LLMProviderError):
+        bot.chat("my secret plans", SearchState(), "s-1")
+
+    [record] = [r for r in caplog.records if r.name == "app.assistant"]
+    assert record.levelname == "WARNING"
+    assert "session=s-1" in record.getMessage() and "status=429" in record.getMessage()
+    assert "rate_limit_error" in record.getMessage()
+    assert "my secret plans" not in record.getMessage()
+
+
 def test_every_message_carries_today_and_current_search(catalog):
     bot, llm = make(catalog, answer("ok"))
     bot.chat("cheaper please", SearchState(max_price=1200))

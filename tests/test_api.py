@@ -47,6 +47,16 @@ def test_llm_errors_become_clean_http_errors(client, monkeypatch, catalog):
     assert res.json()["detail"] == "The assistant is busy, please retry in a moment."
 
 
+@pytest.mark.parametrize("session_id", ["abc\nFAKE LOG LINE", "x" * 65, "../etc", ""])
+def test_forged_session_ids_are_rejected(client, session_id):
+    assert client.post("/api/chat", json={"message": "hi", "session_id": session_id}).status_code == 422
+
+
+def test_bad_session_id_in_reset_is_rejected(client):
+    assert client.post("/api/chat/bad%20id/reset").status_code == 422
+    assert client.post("/api/chat/0123abcd/reset").status_code == 200
+
+
 def test_home_page_is_served(client):
     res = client.get("/")
     assert res.status_code == 200

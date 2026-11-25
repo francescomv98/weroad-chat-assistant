@@ -22,6 +22,9 @@ class Settings:
     anthropic_model: str = os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5")
     # low | medium | high | xhigh | max; empty = the model's default (medium on Haiku 5.5).
     anthropic_effort: str = os.getenv("ANTHROPIC_EFFORT", "low")
+    # Seconds per LLM call before the SDK gives up; the SDKs retry twice on timeouts, 429 and 5xx. 30 s is
+    # ~7x the p99 of a Haiku @low turn (4.4 s) and caps a stuck call at ~1.5 min instead of 3-6 min.
+    llm_timeout_s: float = float(os.getenv("LLM_TIMEOUT_S", "30"))
     max_tool_rounds: int = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "6"))
     turn_log_path: str = os.getenv("TURN_LOG_PATH", "logs/turns.jsonl")
     # How the model finds FAQs: "embeddings" (it writes a query, FAQs ranked by similarity with

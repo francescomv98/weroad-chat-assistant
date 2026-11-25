@@ -121,7 +121,7 @@ class OpenAIClient:
 
         if self._client is None:
             try:
-                self._client = openai.OpenAI(timeout=60.0)  
+                self._client = openai.OpenAI(timeout=settings.llm_timeout_s)
             except openai.OpenAIError as e:
                 raise LLMProviderError(500, "No OpenAI credentials: set OPENAI_API_KEY in .env") from e
         return self._client
@@ -247,7 +247,7 @@ class AnthropicClient:
 
         if self._client is None:
             try:
-                self._client = anthropic.Anthropic(timeout=120.0)
+                self._client = anthropic.Anthropic(timeout=settings.llm_timeout_s)
             except anthropic.AnthropicError as e:
                 raise LLMProviderError(500, "No Anthropic credentials: set ANTHROPIC_API_KEY in .env") from e
         return self._client

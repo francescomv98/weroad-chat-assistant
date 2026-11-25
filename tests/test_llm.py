@@ -134,3 +134,12 @@ def test_the_provider_comes_from_settings(monkeypatch):
     monkeypatch.setattr(llm, "settings", Settings(llm_provider="mistral"))
     with pytest.raises(ValueError, match="LLM_PROVIDER"):
         make_client()
+
+
+def test_both_providers_use_the_chat_timeout_and_keep_the_sdk_retries(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    monkeypatch.setattr(llm, "settings", Settings(llm_timeout_s=30))
+    for client in (OpenAIClient()._get_client(), AnthropicClient()._get_client()):
+        assert client.timeout == 30
+        assert client.max_retries == 2
