@@ -13,6 +13,7 @@ import logging
 import os
 import subprocess
 import sys
+import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -24,6 +25,10 @@ log = logging.getLogger(__name__)
 
 _client: Any = None
 _configured = False
+# The startup warm-up and the first chat turn can configure at the same time: one sets it up, the other
+# waits, and `_configured` turns true only once the client exists (otherwise a turn could see "configured"
+# with no client yet and go untraced).
+_lock = threading.RLock()
 # Extra tags and metadata for the traces started inside `context()` (the eval: run, scenario, model...).
 _extra: ContextVar[tuple[tuple[str, ...], dict[str, str]]] = ContextVar("tracing_extra", default=((), {}))
 # Tags of the turn being traced, so tags added at the end of the turn keep the ones set at its start.
@@ -55,8 +60,16 @@ class _NoOp:
 
 def configure(enabled: bool | None = None, environment: str | None = None, client: Any = None) -> None:
     """enabled=None: on when the Langfuse keys are set. `client` injects a fake in tests."""
-    global _client, _configured
-    _configured = True
+    global _configured
+    with _lock:
+        try:
+            _setup(enabled, environment, client)
+        finally:
+            _configured = True
+
+
+def _setup(enabled: bool | None, environment: str | None, client: Any) -> None:
+    global _client
     if client is not None:
         _client = client
         return
@@ -86,7 +99,9 @@ def configure(enabled: bool | None = None, environment: str | None = None, clien
 
 def _get() -> Any:
     if not _configured:
-        configure()
+        with _lock:
+            if not _configured:
+                configure()
     return _client
 
 

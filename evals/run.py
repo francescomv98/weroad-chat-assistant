@@ -70,7 +70,7 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         
         user_text += " " + turn["user"]
         before = state.model_dump(mode="json")
-        history_len = len(bot.sessions[session_id].messages) if session_id else 0
+        history_len = len(bot.sessions.get(session_id).messages) if session_id else 0
         # With --langfuse, the turn's trace is tagged so it can be found by run, model and category.
         eval_tags = [f"eval-run:{run_id}", f"model:{label}", f"category:{scenario['category']}"]
         eval_meta = {"eval_run": run_id, "scenario": scenario["id"], "category": scenario["category"],
@@ -86,7 +86,7 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
             break
 
         session_id, state = result.session_id, result.search.state
-        messages = bot.sessions[session_id].messages
+        messages = bot.sessions.get(session_id).messages
         grounded = checks.readable([m["content"] for m in messages if m["role"] == "tool"])
         rec["faq_retriever"] = faq_retriever
         rec.update(evaluate_turn(turn, before, state.model_dump(mode="json"), result, grounded, user_text, names, catalog_text,

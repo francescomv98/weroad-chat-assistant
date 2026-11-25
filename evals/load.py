@@ -73,6 +73,7 @@ def start_server(port: int, latency: float, log_dir: str) -> subprocess.Popen:
         "LLM_PROVIDER": "fake",
         "FAKE_LLM_LATENCY_S": str(latency),
         "TURN_LOG_PATH": os.path.join(log_dir, "turns.jsonl"),
+        "WARMUP": "0",  # the warm-up would compute the FAQ embeddings with a real API call
         # Empty, not missing: load_dotenv doesn't override variables that exist, so .env keys stay unused.
         "LANGFUSE_PUBLIC_KEY": "",
         "LANGFUSE_SECRET_KEY": "",

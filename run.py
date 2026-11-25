@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 import os
 import sys
 import threading
@@ -14,20 +15,35 @@ URL = f"http://{HOST}:{PORT}/"
 CHROME_PATHS = [
     os.path.expandvars(r"%ProgramFiles%\Google\Chrome\Application\chrome.exe"),
     os.path.expandvars(r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe"),
-    os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe"),
+    os.path.expandvars(r"%LocalAppData%\Google\Chrome\Application\chrome.exe")
 ]
 
 
+def assistant_ready() -> bool | None:
+    """True/False once the server answers (is the startup warm-up done?), None while it doesn't."""
+    try:
+        with urllib.request.urlopen(URL + "api/ready", timeout=2) as resp:
+            return bool(json.loads(resp.read()).get("assistant_ready", True))
+    except (OSError, ValueError):
+        return None
+
+
 def open_browser() -> None:
-    for _ in range(60):
-        try:
-            urllib.request.urlopen(URL + "api/meta", timeout=1)
+    # Wait for the warm-up (~15-30 s), not just for the server: otherwise the page opens at once and the
+    # first chat still waits for the libraries to load. After 2 minutes open anyway (the page shows the state).
+    printed = False
+    for _ in range(120):
+        ready = assistant_ready()
+        if ready:
+            if printed:
+                print(f"Assistant ready, opening {URL}")
             break
-        except OSError:
-            time.sleep(0.5)
+        if ready is False and not printed:
+            print("Starting the assistant, the browser opens when it's ready...")
+            printed = True
+        time.sleep(1)
     else:
-        print(f"Server not responding, open {URL} manually")
-        return
+        print(f"The assistant isn't ready yet, opening {URL} anyway")
 
     chrome = next((p for p in CHROME_PATHS if os.path.exists(p)), None)
     if chrome:

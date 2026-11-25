@@ -433,6 +433,62 @@ function fillForm() {
   validate();
 }
 
+// ---------- search in the URL ----------
+// The search lives in the query string (?continents=Asia&max_price=1500): a reload keeps it, Back and
+// Forward step through searches, and a search can be shared as a link. Lists repeat their key
+// (continents=Asia&continents=Europe), moods are mood.<name>=<minimum>, defaults are left out.
+
+const URL_SCALARS = ["text", "date_from", "date_to", "max_price", "min_days", "max_days"];
+const URL_LISTS = ["continents", "destinations", "travel_types", "must_have", "physical_ratings", "age_bands"];
+const SORTS = ["relevance", "price", "date", "rating"];
+let urlReady = false;
+
+function stateToQuery(s) {
+  const q = new URLSearchParams();
+  URL_SCALARS.forEach((k) => { if (s[k] != null && s[k] !== "") q.set(k, s[k]); });
+  if (s.text_match === "any") q.set("text_match", "any");
+  URL_LISTS.forEach((k) => (s[k] || []).forEach((v) => q.append(k, v)));
+  Object.entries(s.moods || {}).forEach(([k, v]) => { if (v != null) q.set(`mood.${k}`, v); });
+  if (s.sort && s.sort !== "relevance") q.set("sort", s.sort);
+  const str = q.toString();
+  return str ? `?${str}` : "";
+}
+
+// A link can be edited by hand: anything malformed is dropped here, the rest is checked by the API.
+function stateFromQuery(query) {
+  const q = new URLSearchParams(query);
+  const isoOrNull = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : null;
+  const s = emptyState();
+  s.text = (q.get("text") || "").trim() || null;
+  s.text_match = q.get("text_match") === "any" ? "any" : "all";
+  s.date_from = isoOrNull(q.get("date_from"));
+  s.date_to = isoOrNull(q.get("date_to"));
+  ["max_price", "min_days", "max_days"].forEach((k) => { s[k] = numOrNull(q.get(k)); });
+  URL_LISTS.forEach((k) => { s[k] = q.getAll(k).map((v) => v.trim()).filter(Boolean); });
+  for (const [k, v] of q) {
+    const n = parseInt(v, 10);
+    if (k.startsWith("mood.") && n >= 0 && n <= 100) s.moods[k.slice(5)] = n;
+  }
+  s.sort = SORTS.includes(q.get("sort")) ? q.get("sort") : "relevance";
+  return s;
+}
+
+// Called whenever results are shown, so the address always matches the page. The first call replaces
+// the entry (a link typed by hand may be encoded differently), later ones add a step for Back.
+function syncUrl() {
+  const query = stateToQuery(state);
+  if (urlReady && query === location.search) return;
+  const url = location.pathname + query;
+  if (urlReady) history.pushState(null, "", url); else history.replaceState(null, "", url);
+  urlReady = true;
+}
+
+window.addEventListener("popstate", () => {
+  state = stateFromQuery(location.search);
+  fillForm();
+  runSearch();
+});
+
 // ---------- validation ----------
 
 // Limit the pickers so impossible ranges are hard to choose in the first place.
@@ -571,6 +627,7 @@ function card(r) {
 }
 
 function renderResults(resp) {
+  syncUrl();
   const box = $("results");
   if (resp.total > 0) {
     $("count").textContent = `${resp.total} trip${resp.total === 1 ? "" : "s"} found`;
@@ -621,6 +678,39 @@ function addMsg(kind, html) {
   return el;
 }
 
+function botHtml(reply, count) {
+  return formatReply(reply) +
+    `<span class="info">${count ? `🔎 ${count} trip${count === 1 ? "" : "s"} on the page` : "🔎 no exact matches, see suggestions"}</span>`;
+}
+
+// ---------- chat kept across reloads ----------
+// In sessionStorage: it survives a reload, belongs to this tab and is gone when the tab closes (there is no
+// login, so nothing should outlive the tab). Stored as text and rendered again through esc/formatReply,
+// never as HTML. Only successful turns, like the server. The server keeps the history for an hour
+// (SESSION_TTL_S): after that the assistant starts a fresh chat, and the search in the URL stays.
+
+const CHAT_KEY = "weroad-chat";
+let chatLog = [];  // {kind: "user" | "bot", text, count}
+
+function saveChat() {
+  try { sessionStorage.setItem(CHAT_KEY, JSON.stringify({ sessionId, chatLog })); } catch (e) { /* private mode, full */ }
+}
+
+function clearChat() {
+  chatLog = [];
+  try { sessionStorage.removeItem(CHAT_KEY); } catch (e) { /* nothing to clear */ }
+}
+
+function restoreChat() {
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(CHAT_KEY)); } catch (e) { return; }
+  if (!saved || !Array.isArray(saved.chatLog) || !saved.chatLog.length) return;
+  sessionId = typeof saved.sessionId === "string" ? saved.sessionId : null;
+  chatLog = saved.chatLog.filter((m) => m && (m.kind === "user" || m.kind === "bot"));
+  chatLog.forEach((m) => addMsg(m.kind, m.kind === "user" ? esc(m.text) : botHtml(String(m.text ?? ""), Number(m.count) || 0)));
+  $("starters").hidden = true;
+}
+
 async function sendChat(message) {
   message = message.trim();
   if (!message) return;
@@ -641,8 +731,9 @@ async function sendChat(message) {
     sessionId = resp.session_id;
     typing.remove();
     const count = resp.search.total;
-    addMsg("bot", formatReply(resp.reply) +
-      `<span class="info">${count ? `🔎 ${count} trip${count === 1 ? "" : "s"} on the page` : "🔎 no exact matches, see suggestions"}</span>`);
+    addMsg("bot", botHtml(resp.reply, count));
+    chatLog.push({ kind: "user", text: message }, { kind: "bot", text: resp.reply, count });
+    saveChat();
     state = resp.search.state;
     fillForm();
     renderResults(resp.search);
@@ -657,7 +748,26 @@ async function sendChat(message) {
 
 // ---------- setup ----------
 
+// Right after a server start the assistant is still loading (~15-30 s): keep Send disabled with a note,
+// instead of letting the first message wait that long. Polls /api/meta until the warm-up is done.
+async function waitForAssistant() {
+  const input = $("chat-input"), send = $("send");
+  const placeholder = input.placeholder;
+  input.placeholder = "The assistant is starting, one moment…";
+  send.disabled = true;
+  for (let i = 0; i < 120; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    try {
+      if ((await (await fetch("/api/ready")).json()).assistant_ready !== false) break;
+    } catch (e) { /* server restarting: keep waiting */ }
+  }
+  input.placeholder = placeholder;
+  send.disabled = false;
+}
+
 async function init() {
+  restoreChat();
+  state = stateFromQuery(location.search);
   try {
     const meta = await (await fetch("/api/meta")).json();
     $("f-continents").innerHTML = meta.continents.map((c) =>
@@ -673,6 +783,7 @@ async function init() {
     });
     $("f-type").innerHTML += meta.travel_types.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
     today = meta.today;
+    if (meta.assistant_ready === false) waitForAssistant();
   } catch (e) {
     console.error("could not load /api/meta", e);
   }
@@ -701,6 +812,7 @@ $("starters").querySelectorAll(".chip").forEach((c) => { c.onclick = () => sendC
 $("new-chat").onclick = async () => {
   if (sessionId) await fetch(`/api/chat/${sessionId}/reset`, { method: "POST" }).catch(() => {});
   sessionId = null;
+  clearChat();
   $("messages").innerHTML = '<div class="msg bot">Fresh start! ✨ What kind of trip are you looking for?</div>';
   $("starters").hidden = false;
 };

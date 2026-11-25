@@ -100,7 +100,7 @@ back, stop when it answers. In LangGraph terms:
 | Node `tools` | `_run_tool`: `update_search`, `get_trip_details`, FAQ tool |
 | Conditional edge | no tool calls → END; otherwise → `tools` → `agent` |
 | Recursion limit | `max_tool_rounds = 6`, then a fallback reply |
-| Checkpointing | `self.sessions` in memory, keyed by `session_id` (= LangGraph `thread_id`); a failed turn is rolled back. LangGraph: a memory/Postgres checkpointer |
+| Checkpointing | `SessionStore` (`app/sessions.py`), keyed by `session_id` (= LangGraph `thread_id`); a session is saved only after a successful turn. LangGraph: a memory/Postgres checkpointer |
 | Human-in-the-loop | today a prompt rule ("ask before dropping a constraint the user insisted on"); LangGraph: an `interrupt` before applying a relaxation |
 
 **Why custom.** One agent, three tools, one loop: a framework would add a dependency and a layer to debug
@@ -245,6 +245,12 @@ chats non-stop, so N users = N turns in flight:
   turns queue (no errors, longer waits).
 - **What that means:** ~1,100 turns a minute per process, roughly 500 people chatting at once if each
   writes every 30 s. Production: `--workers N` (≈ N×), or async LLM clients so waiting doesn't hold a thread.
+- **First reply after a start:** it took ~15 s, all spent loading libraries the first chat needed
+  (importing the anthropic SDK alone ~11 s on Windows, Langfuse 2.5-5 s, openai ~4 s, the FAQ embeddings
+  ~2.4 s), not in the model. A background warm-up at startup (`app/main.py`, `WARMUP=0` turns it off)
+  loads them while the page already answers: first chat 2.87 s on a real server. `/api/meta` says when
+  it's done: `run.py` opens the browser only then, and a page opened earlier keeps Send disabled with a
+  note until it is.
 - **Not measured here:** the provider. Its limit comes from arithmetic: tokens per turn from the eval ×
   turns per minute, against the plan's published rate limits.
 
@@ -280,7 +286,8 @@ Langfuse Cloud (EU), grouped in a session per conversation (`app/tracing.py`).
 | Left out | Why / what I'd do |
 |---|---|
 | Auth, booking, real WeRoad APIs | Not required; the assistant ends on the trip URL |
-| Session persistence | Sessions live in memory; Redis or the DB in production |
+| Session persistence | Sessions live in memory (`MemorySessionStore`): dropped after 1 h idle, at most 5,000, least recently used first, so memory stays bounded (~200 MB at most: a 10-turn chat is ~17 KB, ~20-40 KB with Claude's thinking blocks). A restart or an expired session forgets the chat, not the search: the page sends it with every message. The page keeps the search in the URL (reload, Back/Forward, shareable links) and the chat in the tab's sessionStorage (survives a reload, gone with the tab: no login, so nothing outlives it). Redis in production: same get/save/delete interface, history as JSON, an expiry per key; it is what lets `--workers N` and several servers share sessions (today each process has its own) |
+| A cap on one conversation's length | The expiry and the cap bound how many conversations are kept and for how long, not how long one gets: every turn sends the whole history to the model (a 10-turn chat is ~17 KB), so a very long chat makes each of its turns slower and more expensive and could exceed the model's context window. Search chats are a few turns, so not needed for the prototype. Production: keep the last N turns, or summarise the older ones into a short note |
 | Streaming replies | p50 is ~2 s; streaming is the first UX improvement for production |
 | Semantic search over trips | Filters handled the vague requests I tried (see above) |
 | LLM-as-judge for reply quality | Deterministic checks first; a judge for tone/helpfulness would be next |

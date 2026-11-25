@@ -28,6 +28,15 @@ class Settings:
     # Seconds per LLM call before the SDK gives up; the SDKs retry twice on timeouts, 429 and 5xx. 30 s is
     # ~7x the p99 of a Haiku @low turn (4.4 s) and caps a stuck call at ~1.5 min instead of 3-6 min.
     llm_timeout_s: float = float(os.getenv("LLM_TIMEOUT_S", "30"))
+    # In-memory sessions: dropped after this many seconds without a message, and at most this many kept
+    # (least recently used go first). A 10-turn chat is ~17 KB (~20-40 KB with Claude's thinking blocks),
+    # so 5,000 sessions stay under ~200 MB.
+    session_ttl_s: float = float(os.getenv("SESSION_TTL_S", "3600"))
+    session_max: int = int(os.getenv("SESSION_MAX", "5000"))
+    # Load the slow parts in the background when the server starts, not on the first chat: importing the
+    # anthropic SDK alone takes ~11 s on Windows, Langfuse 2.5-5 s, openai ~4 s, the FAQ embeddings ~2.4 s,
+    # so the first reply took ~15 s. 0 = off (the load test, which must call nothing).
+    warmup: bool = os.getenv("WARMUP", "1") != "0"
     max_tool_rounds: int = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "6"))
     turn_log_path: str = os.getenv("TURN_LOG_PATH", "logs/turns.jsonl")
     # How the model finds FAQs: "embeddings" (it writes a query, FAQs ranked by similarity with

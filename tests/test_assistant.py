@@ -109,12 +109,12 @@ def test_stops_after_max_tool_rounds(catalog, monkeypatch, tmp_path):
 def test_failed_turn_leaves_no_half_conversation(catalog):
     bot, _ = make(catalog, answer("Hi!"), LLMProviderError(429, "busy"))
     first = bot.chat("hello", SearchState())
-    history = list(bot.sessions[first.session_id].messages)
+    history = list(bot.sessions.get(first.session_id).messages)
 
     with pytest.raises(LLMProviderError):
         bot.chat("and now?", SearchState(), first.session_id)
 
-    assert bot.sessions[first.session_id].messages == history
+    assert bot.sessions.get(first.session_id).messages == history
 
 
 def test_a_provider_error_is_logged_with_its_cause_but_not_the_user_text(catalog, caplog):

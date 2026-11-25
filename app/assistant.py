@@ -18,6 +18,7 @@ from .faq_embeddings import EmbedFn, FaqEmbeddingIndex
 from .llm import LLMClient, LLMProviderError, estimate_cost_usd, make_client
 from .models import SearchResponse, SearchState
 from .prompts import build_system_prompt, build_tools
+from .sessions import MemorySessionStore, Session, SessionStore
 
 log = logging.getLogger(__name__)
 
@@ -34,12 +35,6 @@ FAQ_INSTRUCTIONS = (
     "Answer only from these FAQs, in the user's language. If none of them answers the question, use the "
     "no-answer reply from your instructions and add nothing else."
 )
-
-
-@dataclass
-class Session:
-    id: str
-    messages: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -108,7 +103,8 @@ def _add_years(d: date, years: int) -> date:
 
 class Assistant:
     def __init__(self, llm: LLMClient | None = None, catalog: Catalog | None = None, today: date | None = None,
-                 faq_retriever: str | None = None, embed: EmbedFn | None = None) -> None:
+                 faq_retriever: str | None = None, embed: EmbedFn | None = None,
+                 sessions: SessionStore | None = None) -> None:
         self.catalog = catalog or get_catalog()
         self.llm = llm or make_client()
         self.today = today
@@ -116,7 +112,8 @@ class Assistant:
         self.tools = build_tools(self.catalog, self.faq_retriever)
         self.system = build_system_prompt(self.catalog, self.faq_retriever)
         self.faq_index = FaqEmbeddingIndex(self.catalog.faqs, embed) if self.faq_retriever == "embeddings" else None
-        self.sessions: dict[str, Session] = {}
+        # `is None`, not `or`: an empty store has len() 0, so it is falsy and would be replaced.
+        self.sessions = sessions if sessions is not None else MemorySessionStore(settings.session_ttl_s, settings.session_max)
 
     def _today(self) -> date:
         return self.today or config.today()
@@ -248,8 +245,9 @@ class Assistant:
         )
 
     def chat(self, message: str, state: SearchState, session_id: str | None = None) -> TurnResult:
+        # An unknown id (expired, or the server restarted) starts an empty history under the same id: the
+        # page sends the current search with every message, so the user only loses the chat so far.
         session = self.sessions.get(session_id or "") or Session(id=session_id or uuid.uuid4().hex)
-        self.sessions[session.id] = session
         history_len = len(session.messages)
 
         trace_meta = {
@@ -281,6 +279,8 @@ class Assistant:
                     "cost_usd": result.meta["cost_usd"]
                 }
             )
+        # Saved only after a successful turn; a failed one was rolled back above and isn't stored.
+        self.sessions.save(session)
         return result
 
     def _turn(self, session: Session, message: str, state: SearchState) -> TurnResult:
@@ -358,7 +358,7 @@ class Assistant:
         return TurnResult(session_id=session.id, reply=reply, search=search, meta=meta)
 
     def reset(self, session_id: str) -> None:
-        self.sessions.pop(session_id, None)
+        self.sessions.delete(session_id)
 
     @staticmethod
     def _log_turn(session_id: str, message: str, reply: str, state: SearchState, total: int, meta: dict) -> None:
