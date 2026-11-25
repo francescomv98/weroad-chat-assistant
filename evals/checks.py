@@ -1,4 +1,5 @@
 from __future__ import annotations
+import difflib
 import json
 import math
 import re
@@ -108,6 +109,13 @@ def check_state_any(before: dict, after: dict, alternatives: list[dict], allow=(
 
 # Scenarios name the FAQ tool "get_faqs"; with embedding retrieval the same job is done by "search_faqs".
 TOOL_ALIASES = {"search_faqs": "get_faqs"}
+TRIP_TOOLS = {"update_search", "get_trip_details"}
+
+
+def faq_only(called: list[str]) -> bool:
+    """An FAQ answer with no trip tool in the turn. Quoted capitalised words there are FAQ terms, often
+    translated ("Camera Privata" for the 'Private Room' option), not trip names."""
+    return bool(called) and all(TOOL_ALIASES.get(c, c) == "get_faqs" for c in called)
 
 
 def check_tools(called: list[str], spec: dict) -> list[str]:
@@ -157,7 +165,8 @@ def readable(tool_outputs: list[str]) -> str:
     return " ".join(out)
 
 
-def invented_facts(reply: str, grounded: str, user_text: str, names: list[str], catalog_text: str = "") -> list[str]:
+def invented_facts(reply: str, grounded: str, user_text: str, names: list[str], catalog_text: str = "",
+                   titles: list[str] = ()) -> list[str]:
     """Prices and trip names in the reply that no tool returned (and the user didn't say),
     plus made-up trips: titles that don't exist anywhere in the catalog."""
     known_numbers = {int(n) for n in re.findall(r"\d+", grounded + " " + user_text)}
@@ -165,7 +174,8 @@ def invented_facts(reply: str, grounded: str, user_text: str, names: list[str], 
     low_reply, low_grounded = reply.lower(), grounded.lower()
     problems += [f"trip '{n}' not returned by any tool" for n in names if n.lower() in low_reply and n.lower() not in low_grounded]
     if catalog_text:
-        problems += [f"trip '{t}' does not exist" for t in made_up_titles(reply, grounded + " " + user_text, names, catalog_text)]
+        problems += [f"trip '{t}' does not exist"
+                     for t in made_up_titles(reply, grounded + " " + user_text, names, catalog_text, titles)]
 
     return problems
 
@@ -207,7 +217,14 @@ def _looks_like_title(text: str) -> bool:
     return len(capitalised) >= 2 and len(capitalised) >= 0.6 * len(content)
 
 
-def made_up_titles(reply: str, known_text: str, names: list[str], catalog_text: str) -> list[str]:
+def _close_to_a_title(name: str, titles: list[str]) -> bool:
+    """A real title with a spelling fix: the data says "Bioluminiscent bay", the model wrote
+    "Bioluminescent Bay". An invented title is far from every real one."""
+    parts = {_norm_text(p.strip()) for t in titles for p in (t, *t.split(":"))}
+    return bool(difflib.get_close_matches(_norm_text(name), parts, n=1, cutoff=0.9))
+
+
+def made_up_titles(reply: str, known_text: str, names: list[str], catalog_text: str, titles: list[str] = ()) -> list[str]:
     """Trip-like titles in the reply that appear nowhere: not in the tool results, not in
     what the user wrote, not in the catalog (titles, descriptions, itineraries, types)."""
     haystack = _norm_text(known_text + " " + catalog_text)
@@ -218,6 +235,8 @@ def made_up_titles(reply: str, known_text: str, names: list[str], catalog_text: 
             continue
         name = candidate.split(":")[0].strip()  # "Bali 360°: Seminyak, ..." -> "Bali 360°"
         if _norm_text(name) in haystack or any(n.lower() in candidate.lower() for n in names):
+            continue
+        if _close_to_a_title(name, titles):
             continue
         out.append(candidate)
     return out
@@ -251,6 +270,8 @@ NO_ANSWER_MARKERS = (
     # "...but not on the weather", "...but not about the plugs", "is not in the FAQ", "don't specifically mention".
     "but not on the", "but not the", "but not about", "not in the faq", "did not have specific",
     "don't specifically", "do not specify",
+    # "The FAQs don't include specific information about tipping in Mexico."
+    "don't include", "do not include",
 )
 
 

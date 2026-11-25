@@ -135,8 +135,9 @@ def test_the_model_sees_every_faq_title_and_gets_back_the_ones_it_picks(catalog)
 
     description = next(t for t in bot.tools if t["name"] == "get_faqs")["description"]
     assert all(f"{f.id}: {f.title}" in description for f in catalog.faqs)
-    faqs = json.loads(tool_results(llm)[0]["content"])["faqs"]
-    assert [f["title"] for f in faqs] == ["Visa for Japan"]
+    result = json.loads(tool_results(llm)[0]["content"])
+    assert [f["title"] for f in result["faqs"]] == ["Visa for Japan"]
+    assert "Answer only from these FAQs" in result["instructions"]
     assert turn.meta["tool_calls"] == ["get_faqs"]
 
 
@@ -198,8 +199,11 @@ def test_with_embeddings_the_model_searches_faqs_by_query(catalog):
 
     assert [t["name"] for t in bot.tools] == ["update_search", "get_trip_details", "search_faqs"]
     assert "search_faqs" in bot.system and "get_faqs" not in bot.system
-    faqs = json.loads(tool_results(llm)[0]["content"])["faqs"]
+    result = json.loads(tool_results(llm)[0]["content"])
+    faqs = result["faqs"]
     assert faqs[0]["title"] == "Visa for Japan" and faqs[0]["similarity"] > faqs[-1]["similarity"]
+    assert "Answer only from these FAQs" in result["instructions"]
+    assert turn.meta["tool_inputs"] == [{"name": "search_faqs", "arguments": {"query": "Visa for Japan?"}}]
     assert turn.meta["faq_retriever"] == "embeddings"
     assert turn.meta["usage"]["embedding_tokens"] == 7
 
@@ -220,3 +224,13 @@ def test_the_retriever_comes_from_settings(catalog, monkeypatch, tmp_path):
 
         assert bot.faq_retriever == retriever and tool in [t["name"] for t in bot.tools]
         assert (bot.faq_index is not None) == (retriever == "embeddings")
+
+
+def test_generic_words_are_removed_from_the_faq_query():
+    from app.faq_embeddings import clean_query
+
+    assert clean_query("Do I need to book my own plane tickets for a WeRoad trip?") == "Do I need to book my own plane tickets?"
+    assert clean_query("What accommodation does WeRoad provide?") == "What accommodation does provide?"
+    assert clean_query("Can I get a refund if I don't go on the trip?") == "Can I get a refund if I don't go?"
+    assert clean_query("Which currency is used in Peru?") == "Which currency is used in Peru?"
+    assert clean_query("WeRoad trips") == "WeRoad trips"  # nothing meaningful left: keep the query

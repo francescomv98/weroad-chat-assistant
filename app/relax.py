@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+import math
 from datetime import date, timedelta
 from typing import Callable
 from .data import Catalog
@@ -45,7 +46,9 @@ def candidate_steps(state: SearchState, catalog: Catalog) -> list[_Step]:
         steps.append(_Step("dates", 7, "any dates", _upd(date_from=None, date_to=None)))
     if state.max_price:
         for pct, cost in ((15, 2), (30, 4)):
-            new = int(state.max_price * (1 + pct / 100))
+            # Round up to the next €10: +15% of €1999 is €2298.85, which the model then quoted as
+            # "around €2300". A round number can be quoted exactly and still means +{pct}%.
+            new = math.ceil(state.max_price * (1 + pct / 100) / 10) * 10
             steps.append(_Step("max_price", cost, f"budget up to €{new} (+{pct}%)", _upd(max_price=new)))
         steps.append(_Step("max_price", 6, "no budget limit", _upd(max_price=None)))
     if state.min_days or state.max_days:

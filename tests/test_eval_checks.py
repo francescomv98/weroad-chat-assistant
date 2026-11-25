@@ -133,6 +133,22 @@ def test_made_up_trips_are_caught_but_real_titles_and_labels_are_not():
     assert checks.made_up_titles(fine, "", names, catalog_text) == []
 
 
+def test_a_real_title_with_a_spelling_fix_is_not_made_up():
+    """Real gpt-4.1-mini reply: the data spells it "Bioluminiscent bay"."""
+    catalog = get_catalog()
+    titles = [t.title for t in catalog.trips]
+    catalog_text = " ".join(t.search_blob for t in catalog.trips)
+    reply = 'The cheapest is a 9-day trip to Puerto Rico: "Rainforest, White Sand & the Bioluminescent Bay."'
+
+    assert checks.made_up_titles(reply, "", [], catalog_text, titles) == []
+    assert checks.made_up_titles('"Gastronomic Adventure in Italy"', "", [], catalog_text, titles) == ["Gastronomic Adventure in Italy"]
+
+
+def test_faq_answers_are_not_checked_for_trip_titles():
+    assert checks.faq_only(["search_faqs"]) and checks.faq_only(["get_faqs"])
+    assert not checks.faq_only(["search_faqs", "update_search"]) and not checks.faq_only([])
+
+
 
 def test_faq_retrieval_is_judged_on_the_faqs_returned():
     titles = {1: "Are flights included?", 8: "Can I get a refund if I cancel?", 4: "Can I cancel my booking?"}
@@ -166,6 +182,7 @@ def test_real_replies_that_admit_the_faqs_dont_cover_it():
         "I found information about the type of plugs used in Japan, but not on the weather.",
         "In Morocco, the answer about plugs is not in the FAQ I accessed.",
         "The FAQs do not specify if dogs are allowed on WeRoad trips.",
+        "The FAQs don't include specific information about tipping in Mexico.",
         "I found information on payment methods and currency in India, but not specifically on visa requirements.",
     ]
     assert all(checks.check_faq({"none": True}, [], r, {})[1] for r in replies)

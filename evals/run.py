@@ -82,10 +82,14 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         messages = bot.sessions[session_id].messages
         grounded = checks.readable([m["content"] for m in messages if m["role"] == "tool"])
         rec["faq_retriever"] = faq_retriever
-        rec.update(evaluate_turn(turn, before, state.model_dump(mode="json"), result, grounded, user_text, names, catalog_text))
+        rec.update(evaluate_turn(turn, before, state.model_dump(mode="json"), result, grounded, user_text, names, catalog_text,
+                                 [t.title for t in bot.catalog.trips]))
 
-        # FAQ retrieval is judged on what the FAQ tool returned in this turn only.
+        # FAQ retrieval is judged on what the FAQ tool returned in this turn. A follow-up answered
+        # without calling it ("and can I cancel?") is judged on the FAQs already returned in the session.
         this_turn = [m["content"] for m in messages[history_len:] if m["role"] == "tool"]
+        if not any(checks.TOOL_ALIASES.get(c, c) == "get_faqs" for c in result.meta["tool_calls"]):
+            this_turn = [m["content"] for m in messages if m["role"] == "tool"]
         found, admitted, faq_problems = checks.check_faq(
             turn.get("faq"), checks.faq_titles_returned(this_turn), result.reply,
             {f.id: f.title for f in bot.catalog.faqs},
@@ -104,7 +108,7 @@ def expectations(turn: dict) -> list[dict]:
 
 
 def evaluate_turn(turn: dict, before: dict, after: dict, result, grounded: str, user_text: str,
-                  names: list[str], catalog_text: str = "") -> dict:
+                  names: list[str], catalog_text: str = "", titles: list[str] = ()) -> dict:
     called = result.meta["tool_calls"]
     problems = []
 
@@ -118,7 +122,9 @@ def evaluate_turn(turn: dict, before: dict, after: dict, result, grounded: str, 
     problems += state.problems
 
     tool_problems = checks.check_tools(called, turn.get("tools", {}))
-    invented = checks.invented_facts(result.reply, grounded, user_text, names, catalog_text)
+    # Made-up trip titles are only looked for when the turn is about trips (see checks.faq_only).
+    trip_catalog = "" if checks.faq_only(called) else catalog_text
+    invented = checks.invented_facts(result.reply, grounded, user_text, names, trip_catalog, titles)
     leaked = [f"reply contains '{t}'" for t in turn.get("reply_excludes", []) if t.lower() in result.reply.lower()]
     zero_ok = None
     if result.search.total == 0:
@@ -135,6 +141,7 @@ def evaluate_turn(turn: dict, before: dict, after: dict, result, grounded: str, 
         "state": SearchState.model_validate(after).model_dump(mode="json", exclude_defaults=True),
         "total": result.search.total,
         "tool_calls": called,
+        "tool_inputs": result.meta.get("tool_inputs", []),
         "latency_ms": result.meta["latency_ms"],
         "cost_usd": result.meta["cost_usd"],
         "usage": result.meta["usage"],

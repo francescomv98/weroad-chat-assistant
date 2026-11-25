@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math
+import re
 import threading
 from typing import Callable, Sequence
 from .config import settings
@@ -24,6 +25,22 @@ def openai_embed(texts: list[str]) -> tuple[list[list[float]], int]:
     except openai.OpenAIError as e:
         raise LLMProviderError(502, f"Embedding request failed: {e}") from e
     return [d.embedding for d in resp.data], resp.usage.total_tokens
+
+
+# "for a WeRoad trip", "on the trip", "WeRoad's": every FAQ is about WeRoad trips, so these words make
+# all FAQs look alike and push the right one down. The model adds them in ~2 of 5 queries even when the
+# tool description says not to (eval 20261125-114357), so they are removed here. On the 203 queries of
+# that run, right FAQ in the top 3: 200 -> 203.
+_GENERIC_WORDS = re.compile(
+    r"\b(?:on|for|in|during|of|with)\s+(?:a|an|the|my|your|our)?\s*(?:weroad\s+)?trips?\b|\bweroad(?:'s|’s)?\b",
+    re.IGNORECASE,
+)
+
+
+def clean_query(query: str) -> str:
+    cleaned = _GENERIC_WORDS.sub(" ", query)
+    cleaned = re.sub(r"\s+([?.!,])", r"\1", re.sub(r"\s{2,}", " ", cleaned)).strip()
+    return cleaned if len(cleaned.split()) >= 2 else query
 
 
 def faq_document(faq: Faq) -> str:
@@ -61,7 +78,7 @@ class FaqEmbeddingIndex:
     def search(self, query: str) -> tuple[list[tuple[Faq, float]], int]:
         """FAQs most similar to `query` (best first, at most top_k, above the cut-off) and the tokens used."""
         doc_vectors = self.vectors()
-        [q], tokens = self.embed([query])
+        [q], tokens = self.embed([clean_query(query)])
         q = _normalise(q)
         scored = [(faq, sum(a * b for a, b in zip(q, v))) for faq, v in zip(self.faqs, doc_vectors)]
         scored.sort(key=lambda x: -x[1])

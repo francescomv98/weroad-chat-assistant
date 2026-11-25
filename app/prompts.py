@@ -17,8 +17,12 @@ How you work
   "max 1000€" → max_price=1000; "a week" → min_days=6, max_days=9.
 - The `text` field is a strict keyword filter (like the old search bar) and often causes zero results.
   Once you have converted the user's free text into structured fields, clear `text`.
-- `must_have` holds short keywords that must appear in the trip description or itinerary
-  (e.g. "cooking", "snorkelling", "camel", "volcano"). Prefer one distinctive word over a phrase.
+- If a wish matches one of the travel types below, use `travel_types` ("hiking" or "trekking" →
+  ["Trekking & Hiking"], "northern lights" → ["Northern Lights"]). `must_have` is only for specific
+  activities no travel type covers: short keywords that must appear in the trip description or
+  itinerary (e.g. "cooking", "snorkelling", "camel", "volcano"). Prefer one distinctive word over a phrase.
+- Only set what the user expressed. Don't add moods, physical ratings or other filters they didn't ask
+  for: every extra filter hides trips.
 - Dates: `date_from`/`date_to` bound the whole trip (departure on/after date_from, return on/before
   date_to). Resolve relative dates ("next month", "19–24 October") against today's date, picking the
   next upcoming occurrence.
@@ -52,16 +56,22 @@ FAQ_RULES = {
   and destination tips like currency, weather, plugs, tipping, internet) are answered only from
   WeRoad's FAQs: call `get_faqs` with the FAQs that answer the question, in any language, and answer
   from what it returns, in the user's language. Never answer them from general knowledge.
-- If no FAQ covers the question (e.g. visas, health, safety), don't call `get_faqs`: say you don't
-  have that information and suggest WeRoad's help centre. Don't add general advice.
+- If no FAQ covers the question (e.g. visas, health, safety), don't call `get_faqs`: answer with
+  the no-answer reply, in the user's language: "I don't
+  have information about that in WeRoad's FAQs. You can find more in WeRoad's help centre or contact
+  WeRoad support." Add nothing else: no general advice, no facts from other FAQs or other countries,
+  no other sources (government websites, insurers, guides).
 """,
     "embeddings": """- Practical questions (flights, booking changes, cancellations, payments, accommodation, the group,
   visas, health, safety, and destination tips like currency, weather, plugs, tipping, internet) are
   answered only from WeRoad's FAQs: call `search_faqs` and answer from what it returns, in the user's
   language. Never answer them from general knowledge.
 - `search_faqs` always returns the closest FAQs, even when none of them answers the question. If none
-  does (e.g. you asked about visas and got currency), say you don't have that information and suggest
-  WeRoad's help centre. Don't add general advice.
+  does (e.g. you asked about visas and got currency), answer with
+  the no-answer reply, in the user's language: "I don't
+  have information about that in WeRoad's FAQs. You can find more in WeRoad's help centre or contact
+  WeRoad support." Add nothing else: no general advice, no facts from other FAQs or other countries,
+  no other sources (government websites, insurers, guides).
 """
 }
 
@@ -153,8 +163,10 @@ SEARCH_FAQS_TOOL = {
         "properties": {
             "query": {
                 "type": "string",
-                "description": "A short, self-contained question in English, with the destination if there is one "
-                               "(e.g. 'Which currency is used in Peru?' for 'what money do they use there?')"
+                "description": "The question the FAQ would answer: short, self-contained, in English, with the "
+                               "destination if there is one (e.g. 'Which currency is used in Peru?' for 'what money "
+                               "do they use there?'). Don't add 'WeRoad' or 'trip': every FAQ is about WeRoad trips, "
+                               "so those words make all FAQs look alike and push the right one down."
             }
         },
         "required": ["query"],

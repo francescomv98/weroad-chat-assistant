@@ -1,4 +1,5 @@
 from app.models import SearchState
+from app.relax import candidate_steps
 from app.service import search
 from tests.conftest import TODAY, titles
 
@@ -48,3 +49,12 @@ def test_combines_changes_when_no_single_one_is_enough(catalog):
     assert set(combo.relaxed_fields) == {"travel_types", "physical_ratings"}
     assert combo.state.continents == ["Europe"]  
     assert titles(resp.closest) == {"Iceland Northern Lights"}
+
+
+def test_suggested_budgets_are_rounded_up_to_ten_euros(catalog):
+    """+15% of €1999 used to be €2298, which the model quoted as "around €2300"."""
+    steps = [s for s in candidate_steps(SearchState(max_price=1999), catalog) if s.field == "max_price"]
+    budgets = [s.apply(SearchState(max_price=1999)).max_price for s in steps]
+
+    assert budgets == [2300, 2600, None]
+    assert steps[0].description == "budget up to €2300 (+15%)"

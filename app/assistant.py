@@ -20,6 +20,13 @@ log = logging.getLogger(__name__)
 
 TOP_N_FOR_MODEL = 5
 
+# Repeated in every FAQ tool result: the rule in the system prompt is thousands of tokens away when the
+# model writes the reply, and the eval showed it adding general knowledge after FAQs that don't answer.
+FAQ_INSTRUCTIONS = (
+    "Answer only from these FAQs, in the user's language. If none of them answers the question, use the "
+    "no-answer reply from your instructions and add nothing else."
+)
+
 
 @dataclass
 class Session:
@@ -165,15 +172,21 @@ class Assistant:
             raise ValueError(f"unknown FAQ ids {unknown}: use the ids listed in the tool description")
         chosen = [by_id[i] for i in dict.fromkeys(faq_ids)][:3]
 
-        return {"faqs": [{"title": f.title, "answer": f.body, "url": f.url} for f in chosen]}
+        return {
+            "faqs": [{"title": f.title, "answer": f.body, "url": f.url} for f in chosen],
+            "instructions": FAQ_INSTRUCTIONS
+        }
 
     def _tool_search_faqs(self, query: str, usage: dict[str, int]) -> dict:
         found, tokens = self.faq_index.search(query)
         usage["embedding_tokens"] = usage.get("embedding_tokens", 0) + tokens
 
-        return {"faqs": [
-            {"title": f.title, "answer": f.body, "url": f.url, "similarity": round(score, 2)} for f, score in found
-        ]}
+        return {
+            "faqs": [
+                {"title": f.title, "answer": f.body, "url": f.url, "similarity": round(score, 2)} for f, score in found
+            ],
+            "instructions": FAQ_INSTRUCTIONS
+        }
 
     def _run_tool(self, name: str, args: dict, state: SearchState,
                   usage: dict[str, int] | None = None) -> tuple[SearchState, str, bool]:
@@ -225,6 +238,8 @@ class Assistant:
         started = time.perf_counter()
         usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "embedding_tokens": 0}
         tool_calls: list[str] = []
+        # The arguments too, not only the names: a wrong FAQ is often a badly written query.
+        tool_inputs: list[dict] = []
         reply = ""
 
         for _round in range(settings.max_tool_rounds):
@@ -245,6 +260,7 @@ class Assistant:
 
             for call in response.tool_calls:
                 tool_calls.append(call.name)
+                tool_inputs.append({"name": call.name, "arguments": call.arguments if call.arguments is not None else call.raw_arguments})
                 if response.stop == "max_tokens":  
                     content, is_error = json.dumps({"error": "tool input was truncated, try again"}), True
                 elif call.arguments is None:
@@ -261,6 +277,7 @@ class Assistant:
             "faq_retriever": self.faq_retriever,
             "latency_ms": int((time.perf_counter() - started) * 1000),
             "tool_calls": tool_calls,
+            "tool_inputs": tool_inputs,
             "usage": usage,
             "cost_usd": estimate_cost_usd(self.llm.model, usage)
         }

@@ -901,8 +901,92 @@
         },
         {
           "user": "and can I cancel if something comes up?",
-          "tools": {"must": ["get_faqs"], "must_not": ["update_search"]},
+          "tools": {"must_not": ["update_search"]},
           "faq": {"ids": [4, 8]}
+        }
+      ]
+    },
+    {
+      "id": "vague-disconnect",
+      "category": "vague",
+      "turns": [
+        {
+          "user": "I want to disconnect from work.",
+          "expect_any": [{"moods.relax": {"min": 30}}, {"moods.nature": {"min": 30}}, {"travel_types": {"contains": "Relax"}}, {"travel_types": {"contains": "Beach"}}],
+          "allow": ["moods", "travel_types", "physical_ratings", "must_have"],
+          "results": "some",
+          "tools": {"must": ["update_search"]}
+        }
+      ]
+    },
+    {
+      "id": "vague-authentic",
+      "category": "vague",
+      "turns": [
+        {
+          "user": "I want an authentic experience away from tourist crowds.",
+          "expect_any": [{"travel_types": {"contains": "Local traditions"}}, {"travel_types": {"contains": "Expedition"}}, {"moods.culture": {"min": 30}}, {"moods.nature": {"min": 30}}],
+          "allow": ["moods", "travel_types", "physical_ratings", "must_have"],
+          "results": "some",
+          "tools": {"must": ["update_search"]}
+        }
+      ]
+    },
+    {
+      "id": "vague-adventure-easy",
+      "category": "vague",
+      "turns": [
+        {
+          "user": "I want something adventurous but not physically demanding.",
+          "expect_any": [{"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "travel_types": {"contains": "Active"}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "travel_types": {"contains": "Expedition"}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "travel_types": {"contains": "Trekking"}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "travel_types": {"contains": "4x4"}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "travel_types": {"contains": "On the road"}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "travel_types": {"contains": "Safari"}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}, "moods.nature": {"min": 30}}, {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}}],
+          "allow": ["moods", "travel_types", "physical_ratings", "must_have"],
+          "results": "some",
+          "tools": {"must": ["update_search"]}
+        }
+      ]
+    },
+    {
+      "id": "vague-adventure-then-easy",
+      "category": "vague",
+      "turns": [
+        {
+          "user": "I'd like something adventurous",
+          "expect_any": [{"travel_types": {"contains": "Active"}}, {"travel_types": {"contains": "Expedition"}}, {"travel_types": {"contains": "Trekking"}}, {"travel_types": {"contains": "4x4"}}, {"travel_types": {"contains": "On the road"}}, {"travel_types": {"contains": "Safari"}}, {"moods.nature": {"min": 30}}],
+          "allow": ["moods", "travel_types", "physical_ratings", "must_have"],
+          "tools": {"must": ["update_search"]}
+        },
+        {
+          "user": "but not too physically demanding, I'm not very fit",
+          "expect": {"physical_ratings": {"contains": "LOW", "excludes": "HIGH"}},
+          "results": "some",
+          "tools": {"must": ["update_search"]}
+        }
+      ]
+    },
+    {
+      "id": "vague-it-disconnect",
+      "category": "vague",
+      "turns": [
+        {
+          "user": "vorrei staccare dal lavoro, qualcosa di tranquillo",
+          "expect_any": [{"moods.relax": {"min": 30}}, {"moods.nature": {"min": 30}}, {"travel_types": {"contains": "Relax"}}, {"travel_types": {"contains": "Beach"}}],
+          "allow": ["moods", "travel_types", "physical_ratings", "must_have"],
+          "results": "some",
+          "tools": {"must": ["update_search"]}
+        }
+      ]
+    },
+    {
+      "id": "vague-recharge-in-europe",
+      "category": "vague",
+      "start": {"continents": ["Europe"]},
+      "turns": [
+        {
+          "user": "somewhere I can recharge, no partying",
+          "expect_any": [{"continents": ["Europe"], "moods.relax": {"min": 30}}, {"continents": ["Europe"], "moods.nature": {"min": 30}}, {"continents": ["Europe"], "travel_types": {"contains": "Relax"}}, {"continents": ["Europe"], "travel_types": {"contains": "Beach"}}],
+          "allow": ["moods", "travel_types", "physical_ratings", "must_have"],
+          "results": "some",
+          "tools": {"must": ["update_search"]}
         }
       ]
     }
