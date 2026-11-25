@@ -104,6 +104,7 @@ class OpenAIClient:
     def __init__(self, model: str | None = None, reasoning_effort: str | None = None) -> None:
         self.model = model or settings.openai_model
         self.effort = reasoning_effort if reasoning_effort is not None else settings.openai_reasoning_effort
+        self.prompt_cache_key = settings.openai_prompt_cache_key
         self._client = None
 
     def _get_client(self):
@@ -127,6 +128,8 @@ class OpenAIClient:
         )
         if self.effort:  
             kwargs["reasoning_effort"] = self.effort
+        if self.prompt_cache_key:
+            kwargs["prompt_cache_key"] = self.prompt_cache_key
         try:
             completion = self._get_client().chat.completions.create(**kwargs)
         except openai.AuthenticationError as e:

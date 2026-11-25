@@ -33,3 +33,18 @@ def test_broken_tool_arguments_dont_raise():
 def test_cut_off_output_is_reported_as_max_tokens():
     resp = OpenAIClient._parse(completion(tool_calls=[fn_call('{"max')], finish="length"))
     assert resp.stop == "max_tokens"
+
+
+def test_the_prompt_cache_key_is_sent_only_when_set():
+    sent = []
+    fake = NS(chat=NS(completions=NS(create=lambda **kw: sent.append(kw) or completion(content="hi"))))
+    client = OpenAIClient(model="gpt-4.1-mini", reasoning_effort="")
+    client._client = fake
+
+    client.prompt_cache_key = "weroad-search-assistant"
+    client.create(system="s", messages=[], tools=[])
+    client.prompt_cache_key = ""
+    client.create(system="s", messages=[], tools=[])
+
+    assert sent[0]["prompt_cache_key"] == "weroad-search-assistant"
+    assert "prompt_cache_key" not in sent[1]

@@ -11,6 +11,10 @@ load_dotenv()
 class Settings:
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     openai_reasoning_effort: str = os.getenv("OPENAI_REASONING_EFFORT", "")
+    # Optional label OpenAI uses to route requests sharing the system prompt and tools to the same cache.
+    # Off by default: an A/B test in the same time window (80 calls each, alternating) showed no difference
+    # (37 vs 34 calls missed the cache entirely). Empty = not sent.
+    openai_prompt_cache_key: str = os.getenv("OPENAI_PROMPT_CACHE_KEY", "")
     max_tool_rounds: int = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "6"))
     turn_log_path: str = os.getenv("TURN_LOG_PATH", "logs/turns.jsonl")
     # How the model finds FAQs: "embeddings" (it writes a query, FAQs ranked by similarity with

@@ -187,6 +187,8 @@ def summarize(records: list[dict]) -> dict:
         "p99": checks.percentile(latencies, 99),
         "cost_per_turn": sum(costs) / len(costs) if costs else None,
         "total_cost": sum(costs) if costs else None,
+        # Share of input tokens served from OpenAI's prompt cache (billed at 25%).
+        "cached_share": _cached_share([r["usage"] for r in done]),
         "state": (sum(r["state_ok"] for r in with_expect), len(with_expect)),
         "state_prf": checks.prf(sum(r["tp"] for r in done), sum(r["fp"] for r in done), sum(r["fn"] for r in done)),
         "tools": (sum(r["tools_ok"] for r in done), len(done)),
@@ -197,6 +199,12 @@ def summarize(records: list[dict]) -> dict:
         "faq_admitted": (sum(r["faq_admitted"] for r in faq_admitted), len(faq_admitted)),
         "by_category": {c: (sum(v), len(v)) for c, v in sorted(by_category.items())}
     }
+
+
+def _cached_share(usages: list[dict]) -> float | None:
+    cached = sum(u.get("cached_input_tokens", 0) for u in usages)
+    total = cached + sum(u.get("input_tokens", 0) for u in usages)
+    return cached / total if total else None
 
 
 def _ratio(pair) -> str:
@@ -227,6 +235,7 @@ def render(summaries: dict[str, dict], records: list[dict], args) -> str:
         ("Latency p99", lambda s: _ms(s["p99"])),
         ("Cost / turn", lambda s: _usd(s["cost_per_turn"])),
         ("Total cost", lambda s: _usd(s["total_cost"])),
+        ("Cached input tokens", lambda s: _pct(s["cached_share"])),
         ("Correct state (accuracy)", lambda s: _ratio(s["state"])),
         ("State fields precision", lambda s: _pct(s["state_prf"][0])),
         ("State fields recall", lambda s: _pct(s["state_prf"][1])),
