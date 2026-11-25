@@ -2,7 +2,7 @@ from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 from app import assistant as assistant_module
-from app import main, service
+from app import config, main
 from app.assistant import Assistant
 from app.config import Settings
 from app.data import BOOKABLE_STATUSES, get_catalog
@@ -17,15 +17,9 @@ ZERO_RESULT_SEARCHES = [
 ]
 
 
-class FrozenDate(date):
-    @classmethod
-    def today(cls):
-        return FROZEN_TODAY
-
-
 @pytest.fixture
 def client(monkeypatch, tmp_path):
-    monkeypatch.setattr(service, "date", FrozenDate)
+    monkeypatch.setattr(config, "settings", Settings(fixed_today=FROZEN_TODAY.isoformat()))
     monkeypatch.setattr(assistant_module, "settings", Settings(turn_log_path=str(tmp_path / "turns.jsonl")))
     return TestClient(main.app)
 

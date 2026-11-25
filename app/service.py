@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import date
+from . import config
 from .data import Catalog, get_catalog
 from .models import SearchResponse, SearchState
 from .relax import find_relaxations
@@ -7,7 +8,7 @@ from .search import run_search
 
 def search(state: SearchState, catalog: Catalog | None = None, on: date | None = None) -> SearchResponse:
     catalog = catalog or get_catalog()
-    on = on or date.today()
+    on = on or config.today()
     results = run_search(catalog, state, on)
     
     if results:

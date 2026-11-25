@@ -1,11 +1,13 @@
+from datetime import date
 import pytest
 from fastapi.testclient import TestClient
-from app import main, service
+from app import config, main
 from app.assistant import Assistant
 from app.data import get_catalog
 from app.llm import LLMProviderError
 from tests.conftest import TODAY
-from tests.test_integration import FrozenDate
+from app.config import Settings
+from tests.test_integration import FROZEN_TODAY
 
 
 @pytest.fixture
@@ -18,7 +20,7 @@ def test_every_sample_trip_has_a_known_continent():
 
 
 def test_empty_search_returns_bookable_trips(client, monkeypatch):
-    monkeypatch.setattr(service, "date", FrozenDate)
+    monkeypatch.setattr(config, "settings", Settings(fixed_today=FROZEN_TODAY.isoformat()))
     body = client.post("/api/search", json={}).json()
     assert body["total"] == len(body["results"]) > 0
 
@@ -49,3 +51,27 @@ def test_home_page_is_served(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "Trip Finder" in res.text
+
+
+def test_fixed_today_is_used_by_the_whole_app(client, monkeypatch):
+    """The page's date pickers (from /api/meta) and the bookable departures agree on the same day."""
+    monkeypatch.setattr(config, "settings", Settings(fixed_today="2026-10-01"))
+    early = client.post("/api/search", json={}).json()
+    assert client.get("/api/meta").json()["today"] == "2026-10-01"
+
+    monkeypatch.setattr(config, "settings", Settings(fixed_today="2027-06-01"))
+    late = client.post("/api/search", json={}).json()
+
+    starts = [d["start"] for r in late["results"] for d in r["departures"]]
+    assert min(starts) >= "2027-06-01"
+    assert early["total"] > late["total"]
+
+
+def test_without_fixed_today_the_real_date_is_used(monkeypatch):
+    monkeypatch.setattr(config, "settings", Settings(fixed_today=""))
+    assert config.today() == date.today()
+
+
+def test_a_wrong_fixed_today_fails_at_startup():
+    with pytest.raises(ValueError, match="FIXED_TODAY"):
+        Settings(fixed_today="24/11/2026")

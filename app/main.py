@@ -2,9 +2,8 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from datetime import date
 from pathlib import Path
-from . import service
+from . import config, service
 from .assistant import Assistant
 from .data import get_catalog
 from .llm import LLMProviderError
@@ -44,7 +43,7 @@ class ChatResponse(BaseModel):
 def meta() -> dict:
     catalog = get_catalog()
     return {
-        "today": date.today().isoformat(),
+        "today": config.today().isoformat(),
         "continents": catalog.continents,
         "destinations": catalog.destinations,
         "travel_types": catalog.travel_types

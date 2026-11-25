@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 from pydantic import ValidationError
 from . import service
+from . import config
 from .config import settings
 from .data import Catalog, get_catalog
 from .faq_embeddings import EmbedFn, FaqEmbeddingIndex
@@ -92,7 +93,7 @@ class Assistant:
         self.sessions: dict[str, Session] = {}
 
     def _today(self) -> date:
-        return self.today or date.today()
+        return self.today or config.today()
 
     # tools
 
