@@ -9,6 +9,7 @@ from app import assistant as assistant_module
 from app.assistant import Assistant, summarise_for_model
 from app.config import Settings, settings
 from app.data import get_catalog
+from app.faq_embeddings import FaqEmbeddingIndex
 from app.llm import LLMClient, OpenAIClient
 from app.models import SearchState
 from app.prompts import build_tools
@@ -34,17 +35,22 @@ def build_client(spec: str) -> LLMClient:
 
 # RUNNING
 
-def warm_up(label: str, client: LLMClient) -> None:
+def warm_up(label: str, client: LLMClient, faq_retrievers: list[str]) -> None:
     """One unmeasured call per model: the first request of a run also pays for opening
-    the connection, which showed up as a 10-17 s "p99" that had nothing to do with the model."""
+    the connection, which showed up as a 10-17 s "p99" that had nothing to do with the model.
+    With embeddings, the FAQs are embedded here too: in production that is done once at startup,
+    so it must not land in the first scenario's latency."""
     try:
         client.create(system="Reply with OK.", messages=[{"role": "user", "content": "ping"}], tools=build_tools(get_catalog()))
+        if "embeddings" in faq_retrievers:
+            FaqEmbeddingIndex(get_catalog().faqs).search("ping")
     except Exception as e:  # noqa: BLE001 - the real run reports the error on every turn anyway
         print(f"  warm-up failed for {label}: {e}")
 
 
-def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names: list[str], catalog_text: str) -> list[dict]:
-    bot = Assistant(llm=client, catalog=get_catalog(), today=FROZEN_TODAY)
+def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names: list[str], catalog_text: str,
+                 faq_retriever: str = "embeddings") -> list[dict]:
+    bot = Assistant(llm=client, catalog=get_catalog(), today=FROZEN_TODAY, faq_retriever=faq_retriever)
     state = SearchState.model_validate(scenario.get("start", {}))
     session_id = None
     user_text = json.dumps(scenario.get("start", {}))
@@ -75,6 +81,7 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         session_id, state = result.session_id, result.search.state
         messages = bot.sessions[session_id].messages
         grounded = checks.readable([m["content"] for m in messages if m["role"] == "tool"])
+        rec["faq_retriever"] = faq_retriever
         rec.update(evaluate_turn(turn, before, state.model_dump(mode="json"), result, grounded, user_text, names, catalog_text))
 
         # FAQ retrieval is judged on what the FAQ tool returned in this turn only.
@@ -231,7 +238,7 @@ def render(summaries: dict[str, dict], records: list[dict], args) -> str:
         f"# Evaluation {datetime.now():%Y-%m-%d %H:%M}",
         "",
         f"Scenarios: {len({r['scenario'] for r in records})} · runs per scenario: {args.runs} · "
-        f"workers: {args.workers} · frozen today: {FROZEN_TODAY}",
+        f"workers: {args.workers} · frozen today: {FROZEN_TODAY} · FAQ retrievers: {', '.join(args.faq_retrievers)}",
         "",
         "| Metric | " + " | ".join(models) + " |",
         "|---|" + "---|" * len(models)
@@ -267,6 +274,8 @@ def main() -> None:
     parser.add_argument("--runs", type=int, default=2, help="runs per scenario (models aren't deterministic)")
     parser.add_argument("--workers", type=int, default=4, help="parallel scenarios; use 1 for the cleanest latency numbers")
     parser.add_argument("--only", default="", help="comma-separated scenario ids or categories")
+    parser.add_argument("--faq-retrievers", nargs="+", default=[settings.faq_retriever], choices=["index", "embeddings"],
+                        help="FAQ retrieval to compare: the model picks from the FAQ index, or embedding search")
     args = parser.parse_args()
 
     scenarios = json.loads((HERE / "scenarios.json").read_text(encoding="utf-8"))["scenarios"]
@@ -288,13 +297,17 @@ def main() -> None:
                             + catalog.destinations + [f.title for f in catalog.faqs])
     clients = {m: build_client(m) for m in args.models}
     for m, client in clients.items():
-        warm_up(m, client)
-    jobs = [(m, clients[m], s, run) for m in args.models for s in scenarios for run in range(args.runs)]
-    print(f"Running {len(jobs)} scenario runs ({len(scenarios)} scenarios x {args.runs} runs x {len(args.models)} models)...")
+        warm_up(m, client, args.faq_retrievers)
+    # One report column per (model, FAQ retriever); the retriever is named only when comparing several.
+    variants = [(m if len(args.faq_retrievers) == 1 else f"{m} · {r}", m, r)
+                for m in args.models for r in args.faq_retrievers]
+    labels = [label for label, _, _ in variants]
+    jobs = [(label, clients[m], s, run, r) for label, m, r in variants for s in scenarios for run in range(args.runs)]
+    print(f"Running {len(jobs)} scenario runs ({len(scenarios)} scenarios x {args.runs} runs x {len(variants)} variants)...")
 
     records: list[dict] = []
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        for recs in pool.map(lambda job: run_scenario(job[0], job[1], job[2], job[3], names, catalog_text), jobs):
+        for recs in pool.map(lambda job: run_scenario(job[0], job[1], job[2], job[3], names, catalog_text, job[4]), jobs):
             records += recs
             r = recs[0]
             mark = "ok " if all(x.get("correct") for x in recs) else "ERR" if any(x.get("error") for x in recs) else "x  "
@@ -304,7 +317,7 @@ def main() -> None:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
             
-    summaries = {m: summarize([r for r in records if r["model"] == m]) for m in args.models}
+    summaries = {label: summarize([r for r in records if r["model"] == label]) for label in labels}
     report = render(summaries, records, args)
     (out_dir / "report.md").write_text(report, encoding="utf-8")
     print("\n" + report)

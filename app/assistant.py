@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from . import service
 from .config import settings
 from .data import Catalog, get_catalog
+from .faq_embeddings import EmbedFn, FaqEmbeddingIndex
 from .llm import LLMClient, estimate_cost_usd, make_client
 from .models import SearchResponse, SearchState
 from .prompts import build_system_prompt, build_tools
@@ -72,12 +73,15 @@ def _add_years(d: date, years: int) -> date:
 
 
 class Assistant:
-    def __init__(self, llm: LLMClient | None = None, catalog: Catalog | None = None, today: date | None = None) -> None:
+    def __init__(self, llm: LLMClient | None = None, catalog: Catalog | None = None, today: date | None = None,
+                 faq_retriever: str | None = None, embed: EmbedFn | None = None) -> None:
         self.catalog = catalog or get_catalog()
         self.llm = llm or make_client()
         self.today = today
-        self.system = build_system_prompt(self.catalog)
-        self.tools = build_tools(self.catalog)
+        self.faq_retriever = faq_retriever or settings.faq_retriever
+        self.tools = build_tools(self.catalog, self.faq_retriever)
+        self.system = build_system_prompt(self.catalog, self.faq_retriever)
+        self.faq_index = FaqEmbeddingIndex(self.catalog.faqs, embed) if self.faq_retriever == "embeddings" else None
         self.sessions: dict[str, Session] = {}
 
     def _today(self) -> date:
@@ -163,7 +167,16 @@ class Assistant:
 
         return {"faqs": [{"title": f.title, "answer": f.body, "url": f.url} for f in chosen]}
 
-    def _run_tool(self, name: str, args: dict, state: SearchState) -> tuple[SearchState, str, bool]:
+    def _tool_search_faqs(self, query: str, usage: dict[str, int]) -> dict:
+        found, tokens = self.faq_index.search(query)
+        usage["embedding_tokens"] = usage.get("embedding_tokens", 0) + tokens
+
+        return {"faqs": [
+            {"title": f.title, "answer": f.body, "url": f.url, "similarity": round(score, 2)} for f, score in found
+        ]}
+
+    def _run_tool(self, name: str, args: dict, state: SearchState,
+                  usage: dict[str, int] | None = None) -> tuple[SearchState, str, bool]:
         """Returns (possibly new state, result json, is_error)."""
         try:
             if name == "update_search":
@@ -172,6 +185,8 @@ class Assistant:
                 result = self._tool_get_trip_details(int(args["trip_id"]))
             elif name == "get_faqs":
                 result = self._tool_get_faqs([int(i) for i in args["faq_ids"]])
+            elif name == "search_faqs" and self.faq_index:
+                result = self._tool_search_faqs(str(args["query"]), usage if usage is not None else {})
             else:
                 return state, json.dumps({"error": f"unknown tool {name}"}), True
             
@@ -208,13 +223,13 @@ class Assistant:
         messages.append({"role": "user", "content": self._context_block(state) + message})
 
         started = time.perf_counter()
-        usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}
+        usage = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "embedding_tokens": 0}
         tool_calls: list[str] = []
         reply = ""
 
         for _round in range(settings.max_tool_rounds):
             response = self.llm.create(system=self.system, messages=messages, tools=self.tools)
-            for k in usage:
+            for k in ("input_tokens", "cached_input_tokens", "output_tokens"):
                 usage[k] += response.usage.get(k, 0)
 
             if response.stop == "refusal":
@@ -235,7 +250,7 @@ class Assistant:
                 elif call.arguments is None:
                     content, is_error = json.dumps({"error": "arguments were not valid JSON", "received": call.raw_arguments}), True
                 else:
-                    state, content, is_error = self._run_tool(call.name, call.arguments, state)
+                    state, content, is_error = self._run_tool(call.name, call.arguments, state, usage)
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": content, "is_error": is_error})
         else:
             reply = "I've updated the search - have a look at the results."
@@ -243,6 +258,7 @@ class Assistant:
         search = service.search(state, self.catalog, self._today())
         meta = {
             "model": self.llm.model,
+            "faq_retriever": self.faq_retriever,
             "latency_ms": int((time.perf_counter() - started) * 1000),
             "tool_calls": tool_calls,
             "usage": usage,

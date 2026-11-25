@@ -12,6 +12,12 @@ class Settings:
     openai_reasoning_effort: str = os.getenv("OPENAI_REASONING_EFFORT", "")
     max_tool_rounds: int = int(os.getenv("ASSISTANT_MAX_TOOL_ROUNDS", "6"))
     turn_log_path: str = os.getenv("TURN_LOG_PATH", "logs/turns.jsonl")
+    # How the model finds FAQs: "embeddings" (it writes a query, FAQs ranked by similarity with
+    # text-embedding-3-small) or "index" (it picks from the list of FAQ titles). Embeddings are the
+    # default: same recall, but they search the FAQ text, not only titles (see evals/results/20261125-095057).
+    faq_retriever: str = os.getenv("FAQ_RETRIEVER", "embeddings")
+    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    faq_min_similarity: float = float(os.getenv("FAQ_MIN_SIMILARITY", "0.3"))
 
 
 settings = Settings()

@@ -42,22 +42,36 @@ Answering
 - Be brief: 1-4 short sentences. The page already shows the full list, so highlight at most 3 trips
   with the reason each fits. Ask at most one clarifying question and only when it changes the results.
 - For questions about one trip use `get_trip_details`.
-- Practical questions (flights, booking changes, cancellations, payments, accommodation, the group,
+{faq_rules}- If the request has nothing to do with travel or WeRoad trips, say briefly that you can only help
+  with finding a trip.
+"""
+
+
+FAQ_RULES = {
+    "index": """- Practical questions (flights, booking changes, cancellations, payments, accommodation, the group,
   and destination tips like currency, weather, plugs, tipping, internet) are answered only from
   WeRoad's FAQs: call `get_faqs` with the FAQs that answer the question, in any language, and answer
   from what it returns, in the user's language. Never answer them from general knowledge.
 - If no FAQ covers the question (e.g. visas, health, safety), don't call `get_faqs`: say you don't
   have that information and suggest WeRoad's help centre. Don't add general advice.
-- If the request has nothing to do with travel or WeRoad trips, say briefly that you can only help
-  with finding a trip.
+""",
+    "embeddings": """- Practical questions (flights, booking changes, cancellations, payments, accommodation, the group,
+  visas, health, safety, and destination tips like currency, weather, plugs, tipping, internet) are
+  answered only from WeRoad's FAQs: call `search_faqs` and answer from what it returns, in the user's
+  language. Never answer them from general knowledge.
+- `search_faqs` always returns the closest FAQs, even when none of them answers the question. If none
+  does (e.g. you asked about visas and got currency), say you don't have that information and suggest
+  WeRoad's help centre. Don't add general advice.
 """
+}
 
 
-def build_system_prompt(catalog: Catalog) -> str:
+def build_system_prompt(catalog: Catalog, faq_retriever: str = "embeddings") -> str:
     return SYSTEM_TEMPLATE.format(
         continents=", ".join(catalog.continents),
         destinations=", ".join(catalog.destinations),
-        travel_types=", ".join(catalog.travel_types)
+        travel_types=", ".join(catalog.travel_types),
+        faq_rules=FAQ_RULES[faq_retriever]
     )
 
 
@@ -126,11 +140,41 @@ _FIXED_TOOLS = [
 ]
 
 
-def build_tools(catalog: Catalog) -> list[dict]:
-    """The FAQ tool lists every FAQ title: the model picks the ones that answer the question.
-    With 50 FAQs (~600 tokens of titles) the model is a better retriever than keyword search:
-    it understands synonyms ("plane tickets" = flights) and other languages. The list is built
-    once from the catalog, so it stays in the cached part of the prompt."""
+SEARCH_FAQS_TOOL = {
+    "name": "search_faqs",
+    "description": (
+        "Search WeRoad help-centre answers by meaning (embedding similarity). Returns up to 3 FAQs "
+        "closest to the query, best first, with a similarity score. The closest FAQs don't always "
+        "answer the question: use only the ones that do."
+    ),
+    "input_schema":
+    {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "A short, self-contained question in English, with the destination if there is one "
+                               "(e.g. 'Which currency is used in Peru?' for 'what money do they use there?')"
+            }
+        },
+        "required": ["query"],
+        "additionalProperties": False
+    }
+}
+
+
+def build_tools(catalog: Catalog, faq_retriever: str = "embeddings") -> list[dict]:
+    """FAQ retrieval comes in two versions, compared in the eval (`--faq-retrievers`):
+    - "index": the FAQ tool lists every FAQ title and the model picks the ones that answer the question.
+      With 50 FAQs (~600 tokens of titles) the model is a better retriever than keyword search: it
+      understands synonyms ("plane tickets" = flights) and other languages. The list is built once
+      from the catalog, so it stays in the cached part of the prompt.
+    - "embeddings": the model writes a query and FAQs are ranked by embedding similarity. The prompt
+      stays the same size however many FAQs there are."""
+    if faq_retriever == "embeddings":
+        return [*_FIXED_TOOLS, SEARCH_FAQS_TOOL]
+    if faq_retriever != "index":
+        raise ValueError(f"unknown FAQ retriever {faq_retriever!r}: use 'index' or 'embeddings'")
     faq_list = "\n".join(f"{f.id}: {f.title}" for f in catalog.faqs)
     get_faqs = {
         "name": "get_faqs",

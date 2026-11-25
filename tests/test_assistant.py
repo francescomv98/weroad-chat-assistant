@@ -49,6 +49,11 @@ def make(catalog, *responses):
     return Assistant(llm=llm, catalog=catalog, today=TODAY), llm
 
 
+def make_index(catalog, *responses):
+    llm = FakeLLM(*responses)
+    return Assistant(llm=llm, catalog=catalog, today=TODAY, faq_retriever="index"), llm
+
+
 def test_update_search_changes_the_page_search(catalog):
     bot, llm = make(catalog, call("update_search", {"continents": ["Asia"], "max_price": 1000}), answer("Try Thailand!"))
 
@@ -124,7 +129,7 @@ def test_every_message_carries_today_and_current_search(catalog):
 
 
 def test_the_model_sees_every_faq_title_and_gets_back_the_ones_it_picks(catalog):
-    bot, llm = make(catalog, call("get_faqs", {"faq_ids": [2]}), answer("Most EU passports get a visa on arrival."))
+    bot, llm = make_index(catalog, call("get_faqs", {"faq_ids": [2]}), answer("Most EU passports get a visa on arrival."))
 
     turn = bot.chat("serve il visto per il Giappone?", SearchState())
 
@@ -136,7 +141,7 @@ def test_the_model_sees_every_faq_title_and_gets_back_the_ones_it_picks(catalog)
 
 
 def test_an_unknown_faq_id_goes_back_to_the_model(catalog):
-    bot, llm = make(catalog, call("get_faqs", {"faq_ids": [99]}), call("get_faqs", {"faq_ids": [1]}), answer("ok"))
+    bot, llm = make_index(catalog, call("get_faqs", {"faq_ids": [99]}), call("get_faqs", {"faq_ids": [1]}), answer("ok"))
 
     bot.chat("do I need a visa?", SearchState())
 
@@ -173,3 +178,45 @@ def test_old_dates_already_on_the_page_dont_block_other_changes(catalog):
     turn = bot.chat("under 1000", start)
 
     assert turn.search.state.max_price == 1000
+
+
+def fake_embed(texts):
+    """Deterministic stand-in for the embedding API: one dimension per word we care about."""
+    words = ("japan", "peru", "visa", "weather")
+    return [[t.lower().count(w) + 0.01 for w in words] for t in texts], 7 * len(texts)
+
+
+def make_embeddings(catalog, *responses):
+    llm = FakeLLM(*responses)
+    return Assistant(llm=llm, catalog=catalog, today=TODAY, faq_retriever="embeddings", embed=fake_embed), llm
+
+
+def test_with_embeddings_the_model_searches_faqs_by_query(catalog):
+    bot, llm = make_embeddings(catalog, call("search_faqs", {"query": "Visa for Japan?"}), answer("Visa on arrival."))
+
+    turn = bot.chat("do I need a visa for Japan?", SearchState())
+
+    assert [t["name"] for t in bot.tools] == ["update_search", "get_trip_details", "search_faqs"]
+    assert "search_faqs" in bot.system and "get_faqs" not in bot.system
+    faqs = json.loads(tool_results(llm)[0]["content"])["faqs"]
+    assert faqs[0]["title"] == "Visa for Japan" and faqs[0]["similarity"] > faqs[-1]["similarity"]
+    assert turn.meta["faq_retriever"] == "embeddings"
+    assert turn.meta["usage"]["embedding_tokens"] == 7
+
+
+def test_faqs_below_the_similarity_cut_off_are_not_returned(catalog):
+    from app.faq_embeddings import FaqEmbeddingIndex
+
+    index = FaqEmbeddingIndex(catalog.faqs, fake_embed, min_similarity=0.5)
+    found, _ = index.search("what's the weather like?")
+
+    assert found == []
+
+
+def test_the_retriever_comes_from_settings(catalog, monkeypatch, tmp_path):
+    for retriever, tool in (("embeddings", "search_faqs"), ("index", "get_faqs")):
+        monkeypatch.setattr(assistant_module, "settings", Settings(turn_log_path=str(tmp_path / "t.jsonl"), faq_retriever=retriever))
+        bot, _ = make(catalog)
+
+        assert bot.faq_retriever == retriever and tool in [t["name"] for t in bot.tools]
+        assert (bot.faq_index is not None) == (retriever == "embeddings")

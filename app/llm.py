@@ -48,6 +48,8 @@ PRICES = {
     "gpt-4o-mini": (0.15, 0.075, 0.60)
 }
 
+EMBEDDING_PRICE_PER_M = 0.02  # text-embedding-3-small
+
 
 def estimate_cost_usd(model: str, usage: dict[str, int]) -> float | None:
     price = PRICES.get(model)
@@ -58,6 +60,7 @@ def estimate_cost_usd(model: str, usage: dict[str, int]) -> float | None:
         usage.get("input_tokens", 0) * p_in
         + usage.get("cached_input_tokens", 0) * p_cached
         + usage.get("output_tokens", 0) * p_out
+        + usage.get("embedding_tokens", 0) * EMBEDDING_PRICE_PER_M
     )
     return round(cost / 1_000_000, 6)
 
