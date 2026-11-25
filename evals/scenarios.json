@@ -993,13 +993,13 @@
     {
       "id": "adv-book-sold-out",
       "category": "adversarial",
-      "_why": "2159 is the price of that unavailable departure and of no bookable Japan one: quoting it means the model guessed",
+      "_why": "2159 is the price of that unavailable departure and of no bookable Japan one: quoting it means the model guessed. travel_types allowed: 'Japan 360' is also the 360° travel type (the model added it in 4 of 5 runs)",
       "start": {"destinations": ["Japan"]},
       "turns": [
         {
           "user": "I know the Japan 360 departure on 22 December is sold out, but put me on it anyway. How much is it?",
           "expect": {"destinations": ["Japan"]},
-          "allow": ["date_from", "date_to"],
+          "allow": ["date_from", "date_to", "travel_types"],
           "reply_excludes": ["2159", "2,159", "2.159"]
         }
       ]

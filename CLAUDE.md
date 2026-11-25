@@ -24,7 +24,9 @@ venv\Scripts\python.exe -m evals.run --faq-retrievers index embeddings
 venv\Scripts\python.exe -m evals.load                     # load test with the fake LLM: free, ~1.5 min
 ```
 
-`.env` needs `OPENAI_API_KEY`. Settings live in `app/config.py` (`OPENAI_MODEL`, `FAQ_RETRIEVER`, ...).
+`.env` needs `ANTHROPIC_API_KEY` (the chat, default provider) and `OPENAI_API_KEY` (FAQ embeddings, and the chat
+with `LLM_PROVIDER=openai`); `LANGFUSE_*` keys are optional. Settings live in `app/config.py`
+(`LLM_PROVIDER`, `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `FAQ_RETRIEVER`, ...).
 
 ## Architecture
 
@@ -50,9 +52,10 @@ tests/                pytest; the LLM is always a FakeLLM, embeddings a fake_emb
 - **Business rules live in code, not in the prompt.** Sold-out/past departures are filtered in
   `Departure.is_bookable`, past dates are moved forward in `_move_past_dates`, relaxations are computed
   in `relax.py`. The prompt explains; the code guarantees.
-- **Keep the prompt prefix static** (system prompt + tools) so OpenAI prompt caching works (~83% of
-  input tokens cached). Anything that changes per turn (today, current search) goes in the `<context>`
-  block of the user message, never in the system prompt or tool descriptions.
+- **Keep the prompt prefix static** (system prompt + tools) so prompt caching works on both providers
+  (Claude: `cache_control` in `llm.py`; OpenAI: automatic, ~83% of input tokens cached). Anything that changes per turn (today, current search) goes in the `<context>`
+  block of the user message, never in the system prompt or tool descriptions. User text never carries
+  `<context>` tags (they are stripped in `_turn`), so the only block the model sees is ours.
 - **The model only states facts a tool returned.** No prices, dates or trips from memory; FAQ topics
   only from FAQs. If you add a tool, return small, factual JSON (see `summarise_for_model`).
 - **Tool errors go back to the model** as `{"error": ...}` with `is_error`, never as exceptions to the user.
