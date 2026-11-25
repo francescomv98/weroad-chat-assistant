@@ -303,9 +303,13 @@ class AnthropicClient:
 
 
 def make_client() -> LLMClient:
-    """LLM_PROVIDER picks the provider: "anthropic" (default) or "openai"."""
+    """LLM_PROVIDER picks the provider: "anthropic" (default), "openai" or "fake" (load tests)."""
     if settings.llm_provider == "anthropic":
         return AnthropicClient()
+    if settings.llm_provider == "fake":
+        from .fake_llm import FakeClient  # load tests only; imported here so llm.py doesn't depend on it
+
+        return FakeClient()
     if settings.llm_provider != "openai":
-        raise ValueError(f"LLM_PROVIDER must be 'openai' or 'anthropic', got {settings.llm_provider!r}")
+        raise ValueError(f"LLM_PROVIDER must be 'openai', 'anthropic' or 'fake', got {settings.llm_provider!r}")
     return OpenAIClient()

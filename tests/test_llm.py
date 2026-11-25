@@ -143,3 +143,19 @@ def test_both_providers_use_the_chat_timeout_and_keep_the_sdk_retries(monkeypatc
     for client in (OpenAIClient()._get_client(), AnthropicClient()._get_client()):
         assert client.timeout == 30
         assert client.max_retries == 2
+
+
+def test_the_fake_client_searches_then_replies_without_calling_any_api(catalog, tmp_path, monkeypatch):
+    from app import assistant as assistant_module
+    from app.assistant import Assistant
+    from app.models import SearchState
+    from tests.conftest import TODAY
+    monkeypatch.setattr(assistant_module, "settings", Settings(turn_log_path=str(tmp_path / "t.jsonl")))
+    monkeypatch.setattr(llm, "settings", Settings(llm_provider="fake", fake_llm_latency_s=0))
+    bot = Assistant(llm=make_client(), catalog=catalog, today=TODAY)
+
+    turn = bot.chat("anything", SearchState())
+
+    assert turn.meta["tool_calls"] == ["update_search"]
+    assert turn.search.state.continents == ["Asia"]
+    assert turn.reply == "Here are some trips for you."

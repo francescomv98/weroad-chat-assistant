@@ -21,6 +21,7 @@ venv\Scripts\python.exe -m evals.run
 venv\Scripts\python.exe -m evals.run --only faq_near_miss,refine --runs 2 --workers 1
 venv\Scripts\python.exe -m evals.run --models gpt-4.1-mini gpt-4o-mini
 venv\Scripts\python.exe -m evals.run --faq-retrievers index embeddings
+venv\Scripts\python.exe -m evals.load                     # load test with the fake LLM: free, ~1.5 min
 ```
 
 `.env` needs `OPENAI_API_KEY`. Settings live in `app/config.py` (`OPENAI_MODEL`, `FAQ_RETRIEVER`, ...).
@@ -36,10 +37,12 @@ app/assistant.py      agent loop: tools update_search, get_trip_details, FAQ too
 app/prompts.py        system prompt + tool schemas (FAQ rules/tool depend on FAQ_RETRIEVER)
 app/faq_embeddings.py embedding FAQ search (default retriever); "index" = model picks from FAQ titles
 app/llm.py            LLMClient protocol, OpenAI and Anthropic clients, prices and cost estimate
+app/fake_llm.py       LLM_PROVIDER=fake: waits like a real call, calls nothing; only for evals/load.py
 app/tracing.py        optional Langfuse traces (one per turn) and eval scores; no-op without keys, off in tests
 app/main.py           FastAPI: /api/search, /api/chat, /api/chat/{id}/reset, /api/meta, /
-evals/                scenarios.json, deterministic checks, run.py -> evals/results/<timestamp>/
-tests/                pytest; the LLM is always a FakeLLM, embeddings a fake_embed
+evals/                scenarios.json, deterministic checks, run.py -> evals/results/<timestamp>/; load.py
+tests/                pytest; the LLM is always a FakeLLM, embeddings a fake_embed;
+                      test_invariants.py checks the business rules on random searches
 ```
 
 ## Rules
@@ -66,6 +69,10 @@ tests/                pytest; the LLM is always a FakeLLM, embeddings a fake_emb
    When a real reply is wrongly flagged, fix the check and add that reply to `tests/test_eval_checks.py`.
 4. Models are not deterministic: use at least `--runs 2`, `--runs 5` before deciding between two options.
 5. New scenarios go in `evals/scenarios.json` (format in its `_readme`); `test_eval_checks.py` validates ids.
+   Check behaviour (state, tools, invented facts), not words: `reply_excludes` also matches refusals
+   ("I can't offer it at €0").
+6. A change to search or relaxation must keep `tests/test_invariants.py` green; a change to the request
+   path (threads, sessions, async) is worth a `python -m evals.load` before and after.
 
 ## Conventions
 
