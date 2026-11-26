@@ -1,4 +1,7 @@
+"""Starts the app for development: the server with auto-reload, and the browser once the assistant
+is ready. `--no-browser` keeps the browser closed; PORT picks the port."""
 from __future__ import annotations
+
 import json
 import os
 import sys
@@ -6,6 +9,7 @@ import threading
 import time
 import urllib.request
 import webbrowser
+
 import uvicorn
 
 HOST = "127.0.0.1"
@@ -50,7 +54,7 @@ def open_browser() -> None:
         webbrowser.register("chrome", None, webbrowser.BackgroundBrowser(chrome))
         webbrowser.get("chrome").open(URL)
     else:
-        webbrowser.open(URL)  
+        webbrowser.open(URL)
 
 if __name__ == "__main__":
     if "--no-browser" not in sys.argv:

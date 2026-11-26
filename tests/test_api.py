@@ -1,12 +1,16 @@
+"""The HTTP API: search and chat endpoints, input validation, clean errors, session ids, and
+FIXED_TODAY applied across the app."""
 from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app import config, main
 from app.assistant import Assistant
+from app.config import Settings
 from app.data import get_catalog
 from app.llm import LLMProviderError
 from tests.conftest import TODAY
-from app.config import Settings
 from tests.test_integration import FROZEN_TODAY
 
 

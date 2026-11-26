@@ -7,12 +7,15 @@ The checks re-implement each filter on their own instead of calling trip_matches
 prove that the code agrees with itself. Seeded, so a failure always reproduces: the message has the state.
 """
 from __future__ import annotations
+
 import random
 from datetime import timedelta
+
 import pytest
+
 from app.data import BOOKABLE_STATUSES, get_catalog
 from app.models import Moods, SearchState
-from app.search import run_search, tokenize, stem
+from app.search import run_search, stem, tokenize
 from app.service import search
 from tests.test_integration import FROZEN_TODAY
 
@@ -68,7 +71,10 @@ def random_state(rng: random.Random, catalog) -> SearchState:
 
 def assert_result_respects(result, state: SearchState, catalog) -> None:
     trip = catalog.trip(result.trip_id)
-    lower = lambda values: {v.lower() for v in values}
+
+    def lower(values):
+        return {v.lower() for v in values}
+
     if state.continents:
         assert result.continent.lower() in lower(state.continents)
     if state.destinations:

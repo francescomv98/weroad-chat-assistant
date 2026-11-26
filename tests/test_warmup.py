@@ -1,6 +1,9 @@
+"""The startup warm-up: it loads what the first chat needs, survives a failing step, and the API
+reports when the assistant is ready."""
 import logging
 import threading
 import time
+
 from app import main
 from app.assistant import Assistant
 from app.config import Settings

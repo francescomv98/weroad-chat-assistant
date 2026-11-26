@@ -1,4 +1,7 @@
+"""The eval's deterministic checks (no LLM judge): search state against the expected one, tools
+called, prices and trip names the reply may have invented."""
 from __future__ import annotations
+
 import difflib
 import json
 import math
@@ -23,7 +26,7 @@ def flatten(state: dict) -> dict:
                     out[f"moods.{mood}"] = score
         else:
             out[key] = value
-            
+
     return out
 
 
@@ -36,7 +39,7 @@ def _norm(value):
         return sorted(str(v).lower() for v in value)
     if isinstance(value, str):
         return value.lower()
-    
+
     return value
 
 
@@ -48,7 +51,7 @@ def match(value, spec) -> bool:
     """Does a state value satisfy an expectation from scenarios.json?"""
     if not isinstance(spec, dict):
         return _same(value, spec)
-    
+
     items = [str(v).lower() for v in value] if isinstance(value, list) else []
 
     for op, arg in spec.items():
@@ -63,16 +66,16 @@ def match(value, spec) -> bool:
             return False
         if op not in ("contains", "excludes", "min", "max"):
             raise ValueError(f"unknown matcher {op!r}")
-        
+
     return True
 
 
 @dataclass
 class StateCheck:
     ok: bool
-    tp: int  
-    fp: int  
-    fn: int 
+    tp: int
+    fp: int
+    fn: int
     problems: list[str] = field(default_factory=list)
 
 
@@ -138,7 +141,7 @@ PRICE_RE = re.compile(r"(?:€|\beur(?:os?)?\b)\s*(\d[\d.,]*)|(\d[\d.,]*)\s*(?:�
 
 
 def _to_int(raw: str) -> int:
-    raw = re.sub(r"(?<=\d)[.,](?=\d{3}(?:\D|$))", "", raw) 
+    raw = re.sub(r"(?<=\d)[.,](?=\d{3}(?:\D|$))", "", raw)
 
     return int(re.split(r"[.,]", raw)[0])
 
@@ -167,11 +170,23 @@ def readable(tool_outputs: list[str]) -> str:
     return " ".join(out)
 
 
+TOOL_PRICE_RE = re.compile(r"price_eur\"?\s*:\s*(\d+)")
+
+
+def budget_gaps(grounded: str, user_text: str) -> set[int]:
+    """How far a price a tool returned is from a number the user gave: "the Peru trip is from €2189, about
+    €189 over your budget" (2189 - 2000, eval 20261126-134314) is arithmetic on facts, not an invented
+    price. Only tool prices against the user's own numbers, not any two numbers, so the check stays strict."""
+    tool_prices = prices_in(grounded) | {int(n) for n in TOOL_PRICE_RE.findall(grounded)}
+    user_numbers = {int(n) for n in re.findall(r"\d+", user_text) if int(n) >= 100}
+    return {abs(p - u) for p in tool_prices for u in user_numbers if p != u}
+
+
 def invented_facts(reply: str, grounded: str, user_text: str, names: list[str], catalog_text: str = "",
                    titles: list[str] = ()) -> list[str]:
     """Prices and trip names in the reply that no tool returned (and the user didn't say),
     plus made-up trips: titles that don't exist anywhere in the catalog."""
-    known_numbers = {int(n) for n in re.findall(r"\d+", grounded + " " + user_text)}
+    known_numbers = {int(n) for n in re.findall(r"\d+", grounded + " " + user_text)} | budget_gaps(grounded, user_text)
     problems = [f"price €{p} not returned by any tool" for p in sorted(prices_in(reply)) if p not in known_numbers]
     low_reply, low_grounded = reply.lower(), grounded.lower()
     problems += [f"trip '{n}' not returned by any tool" for n in names if n.lower() in low_reply and n.lower() not in low_grounded]
@@ -330,9 +345,9 @@ def percentile(values: list[float], p: float) -> float | None:
     """Nearest-rank percentile (no interpolation: with few samples p99 is the max)."""
     if not values:
         return None
-    
+
     ordered = sorted(values)
-    
+
     return ordered[max(0, math.ceil(p / 100 * len(ordered)) - 1)]
 
 
@@ -341,7 +356,7 @@ def prf(tp: int, fp: int, fn: int) -> tuple[float | None, float | None, float | 
     recall = tp / (tp + fn) if tp + fn else None
     if precision is None or recall is None:
         return precision, recall, None
-    
+
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    
+
     return precision, recall, f1

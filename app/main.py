@@ -1,14 +1,20 @@
+"""The FastAPI app: the page and the API (/api/search, /api/chat, /api/chat/{id}/reset, /api/ready,
+/api/meta), plus the background warm-up at startup."""
 from __future__ import annotations
+
 import logging
 import threading
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
-from fastapi import FastAPI, HTTPException, Path as PathParam
+
+from fastapi import FastAPI, HTTPException
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from pathlib import Path
+
 from . import config, service, tracing
 from .assistant import Assistant
 from .data import get_catalog
@@ -58,7 +64,7 @@ def warm_up() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     # In a thread, so the page and the search answer at once; a chat sent during the warm-up waits only
     # for what isn't loaded yet.
     if config.settings.warmup:
@@ -131,7 +137,7 @@ def chat(req: ChatRequest) -> ChatResponse:
     try:
         turn = get_assistant().chat(req.message, req.state, req.session_id)
     except LLMProviderError as e:
-        raise HTTPException(e.status, e.message)
+        raise HTTPException(e.status, e.message) from e
     return ChatResponse(session_id=turn.session_id, reply=turn.reply, search=turn.search, meta=turn.meta)
 
 

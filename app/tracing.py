@@ -8,6 +8,7 @@ Off unless configured: in the app it turns on when LANGFUSE_PUBLIC_KEY and LANGF
 (LANGFUSE_BASE_URL picks the region, EU by default); the eval turns it on only with --langfuse; tests
 keep it off. When it's off every helper is a no-op, and a tracing failure never breaks a chat turn."""
 from __future__ import annotations
+
 import json
 import logging
 import os
@@ -19,7 +20,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
-from . import config 
+
+from . import config  # noqa: F401  (imported for its load_dotenv(): the LANGFUSE_* keys can come from .env)
 
 log = logging.getLogger(__name__)
 
@@ -93,7 +95,7 @@ def _setup(enabled: bool | None, environment: str | None, client: Any) -> None:
             # inside each of ours (23 extra in eval 20261125-161556).
             should_export_span=is_langfuse_span,
         )
-    except Exception:  
+    except Exception:
         log.exception("Langfuse could not start: tracing is off")
 
 

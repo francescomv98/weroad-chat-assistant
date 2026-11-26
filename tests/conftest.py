@@ -1,6 +1,11 @@
+"""Shared test setup: a small catalog of test trips and FAQs (the `catalog` fixture), and tracing
+turned off."""
 from __future__ import annotations
+
 from datetime import date
+
 import pytest
+
 from app import tracing
 from app.data import Catalog, Faq, _parse_trip
 
@@ -46,7 +51,7 @@ def catalog() -> Catalog:
               tour(2, 2, "2027-06-01", "2027-06-09", 1100)]),
         trip(3, "Iceland Northern Lights", "Iceland", "Europe", 7, ["Northern Lights"],
              {"nature": 95}, "MEDIUM", "Glacier walks and a volcano",
-             [tour(3, 1, "2027-01-01", "2027-01-07", 1600),  
+             [tour(3, 1, "2027-01-01", "2027-01-07", 1600),
               tour(3, 2, "2027-01-20", "2027-01-26", 1800)]),
         trip(4, "Peru Inca Trail", "Peru", "America", 14, ["Trekking & Hiking"],
              {"history": 80, "nature": 80}, "HIGH", "Trek to Machu Picchu",

@@ -1,17 +1,21 @@
+"""The assistant: the agent loop that calls the LLM, runs its tools (update_search, get_trip_details,
+the FAQ tool) and returns the reply with the new search. Also keeps past dates in the future and
+rolls back a turn that fails."""
 from __future__ import annotations
+
 import json
 import logging
 import re
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
+
 from pydantic import ValidationError
-from . import service
-from . import config
-from . import tracing
+
+from . import config, service, tracing
 from .config import settings
 from .data import Catalog, get_catalog
 from .faq_embeddings import EmbedFn, FaqEmbeddingIndex
@@ -97,7 +101,7 @@ def outcome_tags(result: TurnResult) -> list[str]:
 def _add_years(d: date, years: int) -> date:
     try:
         return d.replace(year=d.year + years)
-    except ValueError: 
+    except ValueError:
         return d.replace(year=d.year + years, day=28)
 
 
@@ -167,7 +171,7 @@ class Assistant:
 
         if not trip:
             return {"error": f"No trip with id {trip_id}"}
-        
+
         return {
             "trip_id": trip.id,
             "title": trip.title,
@@ -226,7 +230,7 @@ class Assistant:
                 result = self._tool_search_faqs(str(args["query"]), usage if usage is not None else {})
             else:
                 return state, json.dumps({"error": f"unknown tool {name}"}), True
-            
+
         except (ValidationError, ValueError, KeyError, TypeError) as e:
             return state, json.dumps({"error": f"invalid arguments: {e}"}), True
         return state, json.dumps(result, default=str), False
@@ -328,7 +332,7 @@ class Assistant:
                 tool_calls.append(call.name)
                 tool_inputs.append({"name": call.name, "arguments": call.arguments if call.arguments is not None else call.raw_arguments})
                 with tracing.tool(call.name, call.arguments if call.arguments is not None else call.raw_arguments) as span:
-                    if response.stop == "max_tokens":  
+                    if response.stop == "max_tokens":
                         content, is_error = json.dumps({"error": "tool input was truncated, try again"}), True
                     elif call.arguments is None:
                         content, is_error = json.dumps({"error": "arguments were not valid JSON", "received": call.raw_arguments}), True
@@ -354,7 +358,7 @@ class Assistant:
             "cost_usd": estimate_cost_usd(self.llm.model, usage)
         }
         self._log_turn(session.id, message, reply, state, search.total, meta)
-        
+
         return TurnResult(session_id=session.id, reply=reply, search=search, meta=meta)
 
     def reset(self, session_id: str) -> None:

@@ -1,10 +1,12 @@
 """Tracing with the real Langfuse SDK, exporting to memory instead of the network."""
 import json
-from types import SimpleNamespace as NS
 import uuid
+from types import SimpleNamespace as NS
+
 import pytest
 from langfuse import Langfuse
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
 from app import assistant as assistant_module
 from app import tracing
 from app.assistant import Assistant
@@ -170,4 +172,6 @@ def test_the_release_is_the_git_commit_unless_set(monkeypatch):
 
     monkeypatch.delenv("LANGFUSE_RELEASE")
     commit = tracing.release()
-    assert commit and commit.split("-")[0].isalnum()  # e.g. "46696a0" or "46696a0-dirty"
+    if commit is None:  # tests run from a copy without git history (a zip, a bare container)
+        pytest.skip("not a git checkout")
+    assert commit.split("-")[0].isalnum()  # e.g. "46696a0" or "46696a0-dirty"

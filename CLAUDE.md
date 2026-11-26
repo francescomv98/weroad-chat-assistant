@@ -10,7 +10,8 @@ filters, the results list updates, and zero results is never a dead end. Sold-ou
 
 Stack: Python 3, FastAPI, Pydantic v2, Anthropic Claude Haiku 5.5 (default, `LLM_PROVIDER`) or OpenAI gpt-4.1-mini,
 OpenAI text-embedding-3-small for FAQ search, a single static HTML page.
-Data: `samples/trips.json` (50 trips x 10 departures) and `samples/faqs.json` (50 FAQs), loaded in memory.
+Data: `samples/trips.json` (50 trips x 10 departures) and `samples/faqs.json` (50 FAQs), loaded in memory;
+`samples/faq_vectors.json` holds the FAQ embeddings, written by `python -m app.faq_ingest`.
 
 ## Commands (Windows, from the repo root)
 
@@ -22,6 +23,10 @@ venv\Scripts\python.exe -m evals.run --only faq_near_miss,refine --runs 2 --work
 venv\Scripts\python.exe -m evals.run --models gpt-4.1-mini gpt-4o-mini
 venv\Scripts\python.exe -m evals.run --faq-retrievers index embeddings
 venv\Scripts\python.exe -m evals.load                     # load test with the fake LLM: free, ~1.5 min
+venv\Scripts\python.exe -m app.faq_ingest                 # after editing faqs.json: re-embed, commit faq_vectors.json
+venv\Scripts\ruff.exe check .                             # lint (rules in pyproject.toml); --fix for the safe fixes
+venv\Scripts\pip-audit.exe -r requirements-dev.txt        # known CVEs in the pinned packages
+docker run --rm -v "${PWD}:/src" -w /src semgrep/semgrep:1.160.0 semgrep scan --error --metrics off --config p/python --config p/fastapi --config p/secrets --config p/dockerfile --exclude venv --exclude evals/results --exclude logs
 ```
 
 Docker (Docker Desktop running; keys passed at run time, never in the image):
@@ -60,6 +65,7 @@ app/assistant.py      agent loop: tools update_search, get_trip_details, FAQ too
 app/sessions.py       SessionStore (get/save/delete); in memory with idle expiry and a cap; Redis would plug in here
 app/prompts.py        system prompt + tool schemas (FAQ rules/tool depend on FAQ_RETRIEVER)
 app/faq_embeddings.py embedding FAQ search (default retriever); "index" = model picks from FAQ titles
+app/faq_ingest.py     ingestion: embeds the FAQs once into samples/faq_vectors.json (no OpenAI call at startup)
 app/llm.py            LLMClient protocol, OpenAI and Anthropic clients, prices and cost estimate
 app/fake_llm.py       LLM_PROVIDER=fake: waits like a real call, calls nothing; only for evals/load.py
 app/tracing.py        optional Langfuse traces (one per turn) and eval scores; no-op without keys, off in tests
@@ -98,6 +104,23 @@ tests/                pytest; the LLM is always a FakeLLM, embeddings a fake_emb
    ("I can't offer it at €0").
 6. A change to search or relaxation must keep `tests/test_invariants.py` green; a change to the request
    path (threads, sessions, async) is worth a `python -m evals.load` before and after.
+
+## Branches (Git Flow) and CI/CD
+
+- `master`: what is released; every commit there is published as a Docker image. `develop`: the next release.
+- New work: `feature/<name>` from `develop`, pull request back into `develop`.
+- A release: `release/<x.y.z>` from `develop` (only fixes there), merged into `master` with tag `v<x.y.z>`
+  and back into `develop`. An urgent fix: `hotfix/<x.y.z>` from `master`, merged into both, tagged.
+- `.github/workflows/ci.yml`: on pushes to `develop` and on pull requests into `develop`/`master` (feature,
+  release and hotfix branches are tested through their pull request): pytest, Docker build, and a smoke test of the image with the fake LLM
+  (page, search, chat); ruff and pip-audit; semgrep. No API keys, no cost. Run ruff before pushing
+  (commands above). A semgrep false positive gets `# nosemgrep: <rule-id>` with the reason, not a looser config. It doesn't run the eval: that needs keys and costs money, so
+  it stays a manual step (rule 2 above).
+- `.github/workflows/cd.yml`: on pushes to `master` and `v*` tags: CI first, then the image to
+  `ghcr.io/<owner>/weroad-chat` (`latest`, `sha-<commit>`, and `<x.y.z>`/`<x.y>` for tags). On pull requests
+  into `master` it builds the image without pushing it: unmerged code is never published.
+- Check workflow edits with actionlint before pushing:
+  `docker run --rm -v "${PWD}:/repo" -w /repo rhysd/actionlint:latest` (PowerShell).
 
 ## Conventions
 

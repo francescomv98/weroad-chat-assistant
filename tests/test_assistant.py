@@ -1,5 +1,9 @@
+"""The agent loop with a fake LLM: tool calls change the search, errors go back to the model, round
+limit, rollback of failed turns, past dates, FAQ retrieval (index and embeddings)."""
 import json
+
 import pytest
+
 from app import assistant as assistant_module
 from app.assistant import Assistant
 from app.config import Settings
@@ -15,7 +19,7 @@ class FakeLLM:
 
     def __init__(self, *responses):
         self.responses = list(responses)
-        self.seen = []  
+        self.seen = []
 
     def create(self, *, system, messages, tools):
         self.seen.append(list(messages))
@@ -64,7 +68,7 @@ def test_update_search_changes_the_page_search(catalog):
     assert turn.search.state.max_price == 1000
     assert turn.search.total == 1
     assert turn.meta["tool_calls"] == ["update_search"]
-    assert turn.meta["usage"]["input_tokens"] == 200 
+    assert turn.meta["usage"]["input_tokens"] == 200
 
     result = json.loads(tool_results(llm)[0]["content"])
     assert result["result_count"] == 1
@@ -93,12 +97,12 @@ def test_model_gets_its_mistakes_back_instead_of_crashing(catalog):
     assert all(m["is_error"] for m in errors)
     assert "date_from must be before date_to" in errors[0]["content"]
     assert "not valid JSON" in errors[1]["content"]
-    assert turn.search.state.continents == ["Europe"] 
+    assert turn.search.state.continents == ["Europe"]
 
 
 def test_stops_after_max_tool_rounds(catalog, monkeypatch, tmp_path):
     monkeypatch.setattr(assistant_module, "settings", Settings(max_tool_rounds=2, turn_log_path=str(tmp_path / "t.jsonl")))
-    bot, llm = make(catalog) 
+    bot, llm = make(catalog)
 
     turn = bot.chat("anything", SearchState())
 

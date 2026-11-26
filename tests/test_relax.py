@@ -1,3 +1,5 @@
+"""The relaxation engine: cheapest change first, one suggestion per field, combined changes when
+one isn't enough."""
 from app.models import SearchState
 from app.relax import candidate_steps
 from app.service import search
@@ -17,7 +19,7 @@ def test_cheapest_change_comes_first(catalog):
     assert resp.total == 0
 
     first = resp.relaxations[0]
-    
+
     assert first.relaxed_fields == ["max_price"]
     assert first.state.max_price == 910
     assert first.result_count == 1
@@ -47,7 +49,7 @@ def test_combines_changes_when_no_single_one_is_enough(catalog):
     assert len(resp.relaxations) == 1
     combo = resp.relaxations[0]
     assert set(combo.relaxed_fields) == {"travel_types", "physical_ratings"}
-    assert combo.state.continents == ["Europe"]  
+    assert combo.state.continents == ["Europe"]
     assert titles(resp.closest) == {"Iceland Northern Lights"}
 
 

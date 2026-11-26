@@ -1,6 +1,10 @@
+"""The API's data shapes. `SearchState` is the search shared by the form and the assistant; the
+others describe results, suggested relaxations and the search response."""
 from __future__ import annotations
+
 from datetime import date
 from typing import Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 SortKey = Literal["relevance", "price", "date", "rating"]
@@ -29,23 +33,23 @@ class SearchState(BaseModel):
     """
 
     text: str | None = None
-    text_match: Literal["all", "any"] = "all"  # "all" = every word must match 
-    date_from: date | None = None  
-    date_to: date | None = None  
+    text_match: Literal["all", "any"] = "all"  # "all" = every word must match
+    date_from: date | None = None
+    date_to: date | None = None
     max_price: int | None = Field(None, gt=0)
     min_days: int | None = Field(None, gt=0)
     max_days: int | None = Field(None, gt=0)
     continents: list[str] = Field(default_factory=list)
     destinations: list[str] = Field(default_factory=list)
     travel_types: list[str] = Field(default_factory=list)
-    must_have: list[str] = Field(default_factory=list)  
+    must_have: list[str] = Field(default_factory=list)
     moods: Moods = Field(default_factory=Moods)
     physical_ratings: list[PhysicalRating] = Field(default_factory=list)
     age_bands: list[AgeBand] = Field(default_factory=list)
     sort: SortKey = "relevance"
 
     @model_validator(mode="after")
-    def _check_ranges(self) -> "SearchState":
+    def _check_ranges(self) -> SearchState:
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValueError("date_from must be before date_to")
         if self.min_days and self.max_days and self.min_days > self.max_days:

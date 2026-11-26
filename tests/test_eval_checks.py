@@ -1,6 +1,7 @@
 """The evaluation's own checks: a wrong metric is worse than no metric."""
 import json
 from pathlib import Path
+
 from app.data import get_catalog
 from evals import checks
 
@@ -38,6 +39,25 @@ def test_invented_prices_and_trips():
     assert checks.invented_facts(bad, grounded, "", names) == [
         "price €650 not returned by any tool", "trip 'Japan 360°' not returned by any tool"
     ]
+
+
+def test_the_gap_between_a_price_and_the_users_budget_is_not_invented():
+    # Real reply, eval 20261126-134314 (faq-in-search-peru, turn 3): 2189 - 2000 = 189.
+    grounded = checks.readable([json.dumps({
+        "total": 0, "closest": [{"title": "Peru 360°: Lima, Cusco and Machu Picchu", "from_price_eur": 2189,
+                                 "next_departures": ["2027-01-07→2027-01-18 €2189 (6 seats)"]}],
+        "relaxations": [{"change": "budget up to €2300", "result_count": 1}]})])
+    user_text = '{} show me trips to Peru what currency do they use? ok, only trips under 2000 euros'
+    reply = ("No Peru trip is under €2000. The only Peru trip is from €2189, which is about €189 over your "
+             "budget. You could raise the budget to €2300 to see the Peru trip.")
+    assert checks.invented_facts(reply, grounded, user_text, []) == []
+
+    # Still strict: a gap between two tool prices, or one the numbers don't give, is flagged.
+    two_prices = checks.readable([json.dumps({"closest": [{"from_price_eur": 2189}, {"from_price_eur": 1049}]})])
+    assert checks.invented_facts("one is €1140 cheaper", two_prices, "", []) == [
+        "price €1140 not returned by any tool"]
+    assert checks.invented_facts("about €150 over your budget", grounded, user_text, []) == [
+        "price €150 not returned by any tool"]
 
 
 def test_zero_results_reply_must_point_to_something_concrete():

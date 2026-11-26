@@ -1,4 +1,7 @@
+"""Loads the sample data (samples/trips.json, faqs.json) into Trip, Departure and Faq objects.
+`Departure.is_bookable` decides which departures can ever be shown (not sold out, not past)."""
 from __future__ import annotations
+
 import json
 import re
 from dataclasses import dataclass, field
@@ -63,11 +66,11 @@ class Trip:
     physical_rating: str
     short_description: str
     description: str
-    rating: float | None 
+    rating: float | None
     rating_count: int
     itinerary: tuple[dict, ...]
     departures: tuple[Departure, ...]
-    search_blob: str = field(repr=False)  
+    search_blob: str = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -101,7 +104,7 @@ def _build_blob(raw: dict) -> str:
         parts.append(day.get("title") or "")
         parts.append(day.get("nights") or "")
         parts.extend(day.get("highlights") or [])
-        
+
     return normalise_text(" ".join(parts))
 
 

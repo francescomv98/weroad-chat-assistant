@@ -13,6 +13,7 @@ The provider's own limits are not measured here: compare its published rate limi
 turn from the eval (see DECISION.md).
 """
 from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -23,6 +24,7 @@ import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+
 from evals.checks import percentile
 
 MESSAGES = ["somewhere in Asia", "under 1500 euros", "Japan for under 900", "with a cooking class"]
