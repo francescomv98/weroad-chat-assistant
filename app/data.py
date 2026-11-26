@@ -1,3 +1,5 @@
+"""Loads the sample data (samples/trips.json, faqs.json) into Trip, Departure and Faq objects.
+`Departure.is_bookable` decides which departures can ever be shown (not sold out, not past)."""
 from __future__ import annotations
 
 import json

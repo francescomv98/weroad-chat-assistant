@@ -1,3 +1,5 @@
+"""The in-memory session store: expiry, the cap with least recently used first, parallel saves,
+and failed turns that store nothing."""
 import threading
 
 import pytest

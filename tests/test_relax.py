@@ -1,3 +1,5 @@
+"""The relaxation engine: cheapest change first, one suggestion per field, combined changes when
+one isn't enough."""
 from app.models import SearchState
 from app.relax import candidate_steps
 from app.service import search

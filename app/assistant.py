@@ -1,3 +1,6 @@
+"""The assistant: the agent loop that calls the LLM, runs its tools (update_search, get_trip_details,
+the FAQ tool) and returns the reply with the new search. Also keeps past dates in the future and
+rolls back a turn that fails."""
 from __future__ import annotations
 
 import json

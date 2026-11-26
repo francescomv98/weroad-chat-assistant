@@ -1,3 +1,5 @@
+"""The system prompt and the tool definitions sent to the model. Both are static (nothing that changes
+per turn), so the provider can cache them."""
 from __future__ import annotations
 
 from .data import Catalog

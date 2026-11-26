@@ -1,3 +1,5 @@
+"""The LLM evaluation: runs the scenarios in evals/scenarios.json against one or more models and writes
+report.md and turns.jsonl to evals/results/<timestamp>/. Needs API keys and costs money."""
 from __future__ import annotations
 
 import argparse

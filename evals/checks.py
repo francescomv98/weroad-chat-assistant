@@ -1,3 +1,5 @@
+"""The eval's deterministic checks (no LLM judge): search state against the expected one, tools
+called, prices and trip names the reply may have invented."""
 from __future__ import annotations
 
 import difflib

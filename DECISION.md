@@ -27,6 +27,23 @@ from it. The user's current search (text, dates, filters) is the starting point 
 | Zero results → closest options | `app/relax.py` | Deterministic, testable, free, and every suggestion comes with a real result count |
 | Past dates ("19–24 October" in November) moved to the next year | `Assistant._move_past_dates` | The eval caught the model searching last October and telling users there were no trips; it also undid a fake "today: 2020" typed by a user |
 
+**"Today" is configurable (`FIXED_TODAY`), the sample data is left as it is.** The brief says some
+departures are already in the past and allows changing them. Instead of editing `samples/`, the whole app
+asks one function for today's date (`config.today()`): `FIXED_TODAY=YYYY-MM-DD` if set, the real date
+otherwise. Why:
+- **The data ages, the demo shouldn't.** Departures run from 2026-10-12 to 2027-09-29: every day more of
+  them become past, and after September 2027 every search would return nothing. With a fixed date, the
+  prototype behaves the same whenever a reviewer opens it.
+- **The data stays as given.** Shifting dates in the files would be a one-off fix that ages again, and
+  would make the data differ from what the brief provided.
+- **One date everywhere, so nothing disagrees:** which departures are bookable (`Departure.is_bookable`),
+  relative dates and the past-date correction in the assistant ("next month", "19–24 October"), the
+  `today` the model sees in its `<context>` block, and the date pickers on the page (`/api/meta`).
+- **Reproducible checks.** Tests set the date through it instead of patching `date` inside modules, and
+  the eval freezes the same way (`Assistant(today=2026-11-24)`), so its numbers don't drift with the
+  calendar.
+- A wrong format stops the app at startup with a clear error, rather than failing on the first search.
+
 **Relaxation engine.** Each constraint has relaxation steps with a cost (e.g. dates ±7 days = 2,
 budget +15% = 2, drop a must-have = 4, any destination = 8). It tries single steps cheapest-first, one
 suggestion per field, max 3; if none works alone, it removes whole fields cheapest-first until trips come
@@ -154,8 +171,18 @@ turn. Lessons that shaped the implementation:
   the prompt tells the model the closest FAQs may not answer and to say so.
 - **The model rewrites the query** (English, self-contained, with the destination), so "what money do
   they use there?" with Peru on the page becomes "Which currency is used in Peru?".
-- FAQ vectors are computed once per process, in memory, with plain-Python cosine similarity: no vector
-  database for 50 documents. In production they'd be computed when FAQs change and stored (e.g. pgvector).
+- **FAQ vectors come from an ingestion step**, not from every startup: `python -m app.faq_ingest` embeds the
+  FAQs once into `samples/faq_vectors.json` (committed, shipped in the image), with the model and a hash of
+  the FAQ texts. The server loads it in ~0.05 s with no OpenAI call; if the file is missing or out of date
+  it computes the vectors at startup as before and logs a warning, and a test fails in CI until the file
+  is regenerated. What it buys: no startup dependency on OpenAI, each server instance doesn't re-embed the
+  same FAQs, and fixed vectors make eval runs repeatable (two embedding calls of the same FAQs differ by up
+  to ~7e-4 per component and swapped 2nd/3rd place on 2 of 328 logged queries; rounding to 6 decimals
+  changed none). What it doesn't: the user's question is still embedded at question time, so FAQ search
+  still needs OpenAI. No chunking: each FAQ is one short question and answer, splitting it would separate
+  the two. Search stays plain-Python cosine similarity in memory, microseconds for 50 documents. A vector
+  database (e.g. pgvector) pays off with thousands of documents, several servers, or filters in the same
+  query; then ingestion would run when FAQs change in their CMS instead of by hand.
 - **Generic words are removed from the query before embedding it.** The logged queries showed the cause of
   the plane-tickets miss: the model wrote "…plane tickets **for a WeRoad trip**?", and since every FAQ is
   about WeRoad trips those words pushed the right one down. "WeRoad" and "on the trip" are stripped in

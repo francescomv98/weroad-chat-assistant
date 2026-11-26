@@ -1,3 +1,5 @@
+"""Shared test setup: a small catalog of test trips and FAQs (the `catalog` fixture), and tracing
+turned off."""
 from __future__ import annotations
 
 from datetime import date

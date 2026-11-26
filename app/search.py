@@ -1,3 +1,5 @@
+"""The exact search: every SearchState field is a hard filter, only bookable departures are kept,
+and results are sorted."""
 from __future__ import annotations
 
 import re

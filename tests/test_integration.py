@@ -1,3 +1,5 @@
+"""End to end on the real sample data: unbookable departures never reach the page, suggestions
+return what they promise, a conversation over several turns."""
 from datetime import date
 
 import pytest

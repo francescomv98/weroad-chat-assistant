@@ -1,3 +1,5 @@
+"""Settings read from environment variables (and .env): provider, models, FAQ retrieval, sessions,
+timeouts. `today()` is the date the whole app uses (FIXED_TODAY or the real date)."""
 from __future__ import annotations
 
 import os
