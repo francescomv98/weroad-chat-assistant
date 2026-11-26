@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import difflib
 import json
 import math
@@ -23,7 +24,7 @@ def flatten(state: dict) -> dict:
                     out[f"moods.{mood}"] = score
         else:
             out[key] = value
-            
+
     return out
 
 
@@ -36,7 +37,7 @@ def _norm(value):
         return sorted(str(v).lower() for v in value)
     if isinstance(value, str):
         return value.lower()
-    
+
     return value
 
 
@@ -48,7 +49,7 @@ def match(value, spec) -> bool:
     """Does a state value satisfy an expectation from scenarios.json?"""
     if not isinstance(spec, dict):
         return _same(value, spec)
-    
+
     items = [str(v).lower() for v in value] if isinstance(value, list) else []
 
     for op, arg in spec.items():
@@ -63,16 +64,16 @@ def match(value, spec) -> bool:
             return False
         if op not in ("contains", "excludes", "min", "max"):
             raise ValueError(f"unknown matcher {op!r}")
-        
+
     return True
 
 
 @dataclass
 class StateCheck:
     ok: bool
-    tp: int  
-    fp: int  
-    fn: int 
+    tp: int
+    fp: int
+    fn: int
     problems: list[str] = field(default_factory=list)
 
 
@@ -138,7 +139,7 @@ PRICE_RE = re.compile(r"(?:â‚¬|\beur(?:os?)?\b)\s*(\d[\d.,]*)|(\d[\d.,]*)\s*(?:â
 
 
 def _to_int(raw: str) -> int:
-    raw = re.sub(r"(?<=\d)[.,](?=\d{3}(?:\D|$))", "", raw) 
+    raw = re.sub(r"(?<=\d)[.,](?=\d{3}(?:\D|$))", "", raw)
 
     return int(re.split(r"[.,]", raw)[0])
 
@@ -330,9 +331,9 @@ def percentile(values: list[float], p: float) -> float | None:
     """Nearest-rank percentile (no interpolation: with few samples p99 is the max)."""
     if not values:
         return None
-    
+
     ordered = sorted(values)
-    
+
     return ordered[max(0, math.ceil(p / 100 * len(ordered)) - 1)]
 
 
@@ -341,7 +342,7 @@ def prf(tp: int, fp: int, fn: int) -> tuple[float | None, float | None, float | 
     recall = tp / (tp + fn) if tp + fn else None
     if precision is None or recall is None:
         return precision, recall, None
-    
+
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    
+
     return precision, recall, f1

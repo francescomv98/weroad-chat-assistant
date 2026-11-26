@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from .data import Catalog
 
 SYSTEM_TEMPLATE = """\
@@ -101,10 +102,10 @@ _FIXED_TOOLS = [
             "to change; to remove a constraint, list the field in `clear`. Returns the result count, the "
             "top trips, and - when nothing matches - suggested relaxations and the closest trips."
         ),
-        "input_schema": 
+        "input_schema":
         {
             "type": "object",
-            "properties": 
+            "properties":
             {
                 "text": {"type": "string", "description": "Strict keyword filter. Usually leave empty."},
                 "text_match": {"type": "string", "enum": ["all", "any"], "description": "Whether all or any words of `text` must match"},
@@ -117,7 +118,7 @@ _FIXED_TOOLS = [
                 "destinations": {**_STR_LIST, "description": "Countries"},
                 "travel_types": _STR_LIST,
                 "must_have": {**_STR_LIST, "description": "Keywords that must appear in the trip, e.g. ['cooking']"},
-                "moods": 
+                "moods":
                 {
                     "type": "object",
                     "description": "Minimum mood scores 0-100; only set the ones that matter",
@@ -127,7 +128,7 @@ _FIXED_TOOLS = [
                 "physical_ratings": {"type": "array", "items": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]}},
                 "age_bands": {"type": "array", "items": {"type": "string", "enum": ["18-25", "25-35", "25-49"]}},
                 "sort": {"type": "string", "enum": ["relevance", "price", "date", "rating"]},
-                "clear": 
+                "clear":
                 {
                     "type": "array",
                     "items": {"type": "string", "enum": SEARCH_FIELDS},
@@ -140,7 +141,7 @@ _FIXED_TOOLS = [
     {
         "name": "get_trip_details",
         "description": "Full details of one trip: description, day-by-day itinerary, moods and all bookable departures.",
-        "input_schema": 
+        "input_schema":
         {
             "type": "object",
             "properties": {"trip_id": {"type": "integer"}},

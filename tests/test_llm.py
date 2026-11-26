@@ -1,9 +1,18 @@
 from types import SimpleNamespace as NS
+
 import pytest
 from anthropic.types import Message
+
 from app import llm
 from app.config import Settings
-from app.llm import AnthropicClient, OpenAIClient, ToolCall, estimate_cost_usd, make_client, to_anthropic_messages
+from app.llm import (
+    AnthropicClient,
+    OpenAIClient,
+    ToolCall,
+    estimate_cost_usd,
+    make_client,
+    to_anthropic_messages,
+)
 
 
 def completion(content=None, tool_calls=None, finish="stop", prompt=1000, cached=0, out=50):
@@ -106,7 +115,11 @@ def test_the_history_is_converted_to_the_messages_api():
 
 def test_the_request_caches_the_prompt_and_uses_fallbacks_only_where_supported():
     sent = []
-    create = lambda **kw: sent.append(kw) or claude_message([{"type": "text", "text": "hi"}])
+
+    def create(**kw):
+        sent.append(kw)
+        return claude_message([{"type": "text", "text": "hi"}])
+
     fake = NS(messages=NS(create=create), beta=NS(messages=NS(create=create)))
 
     haiku = AnthropicClient(model="claude-haiku-5-5", effort="low")

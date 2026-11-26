@@ -1,6 +1,8 @@
 from __future__ import annotations
+
 import re
 from datetime import date
+
 from .data import Catalog, Departure, Trip
 from .models import DepartureOut, SearchState, TripResult
 
@@ -144,5 +146,5 @@ def run_search(catalog: Catalog, state: SearchState, today: date) -> list[TripRe
         if not deps:
             continue
         results.append(_to_result(trip, deps, score, matched))
-        
+
     return _sort(results, state.sort)

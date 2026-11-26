@@ -1,6 +1,8 @@
 from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app import assistant as assistant_module
 from app import config, main
 from app.assistant import Assistant
@@ -11,8 +13,8 @@ from tests.test_assistant import FakeLLM, answer, call
 FROZEN_TODAY = date(2026, 11, 24)
 
 ZERO_RESULT_SEARCHES = [
-    {"text": "northern lights", "max_price": 800},  
-    {"destinations": ["Japan"], "max_price": 900},  
+    {"text": "northern lights", "max_price": 800},
+    {"destinations": ["Japan"], "max_price": 900},
     {"must_have": ["cooking"], "date_from": "2027-10-19", "date_to": "2027-10-24"}
 ]
 
@@ -72,7 +74,7 @@ def test_conversation_over_several_turns(client, monkeypatch):
         "message": "only trips with a cooking class",
         "state": {"text": "cooking class"}
     }).json()
-    
+
     session = first["session_id"]
     assert first["search"]["state"]["must_have"] == ["cooking"]
     assert first["search"]["state"]["text"] is None
@@ -83,14 +85,14 @@ def test_conversation_over_several_turns(client, monkeypatch):
         "state": first["search"]["state"],
         "session_id": session
     }).json()
-    
+
     state = second["search"]["state"]
     assert second["session_id"] == session
-    assert state["must_have"] == ["cooking"] 
+    assert state["must_have"] == ["cooking"]
     assert (state["date_from"], state["date_to"]) == ("2027-10-19", "2027-10-24")
     assert second["search"]["total"] == 0
     assert second["search"]["relaxations"]
-    
+
     seen = llm.seen[-1]
     assert seen[0]["content"].endswith("only trips with a cooking class")
     assert '"must_have":["cooking"]' in seen[-3]["content"]
