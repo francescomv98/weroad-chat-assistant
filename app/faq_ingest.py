@@ -14,7 +14,7 @@ from .faq_embeddings import (
     _normalise,
     documents_hash,
     faq_document,
-    openai_embed
+    openai_embed,
 )
 
 # Unit vectors have components well below 1: 6 decimals change a cosine similarity by ~1e-5, far below the
