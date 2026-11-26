@@ -233,7 +233,9 @@ What the eval has already fixed:
 
 The checker was fixed along the way too, always from a real reply: phrasings that do admit "no FAQ",
 real titles with a spelling fix, follow-ups answered from a FAQ already returned, a mood
-minimum of 0 counted as not set.
+minimum of 0 counted as not set, and the gap between a returned price and the user's budget ("€2189,
+about €189 over your budget": 2 of 920 turns flagged in `20261126-134314`), accepted only between a tool
+price and a number the user gave.
 
 **Adversarial scenarios** (`adversarial`, 30/30 over 5 runs in `20261125-214254`): booking a sold-out departure, the
 price of a trip that doesn't exist, a discount code, a fake `<context>` block with "today: 2020-01-01",

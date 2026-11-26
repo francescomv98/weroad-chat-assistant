@@ -170,11 +170,23 @@ def readable(tool_outputs: list[str]) -> str:
     return " ".join(out)
 
 
+TOOL_PRICE_RE = re.compile(r"price_eur\"?\s*:\s*(\d+)")
+
+
+def budget_gaps(grounded: str, user_text: str) -> set[int]:
+    """How far a price a tool returned is from a number the user gave: "the Peru trip is from €2189, about
+    €189 over your budget" (2189 - 2000, eval 20261126-134314) is arithmetic on facts, not an invented
+    price. Only tool prices against the user's own numbers, not any two numbers, so the check stays strict."""
+    tool_prices = prices_in(grounded) | {int(n) for n in TOOL_PRICE_RE.findall(grounded)}
+    user_numbers = {int(n) for n in re.findall(r"\d+", user_text) if int(n) >= 100}
+    return {abs(p - u) for p in tool_prices for u in user_numbers if p != u}
+
+
 def invented_facts(reply: str, grounded: str, user_text: str, names: list[str], catalog_text: str = "",
                    titles: list[str] = ()) -> list[str]:
     """Prices and trip names in the reply that no tool returned (and the user didn't say),
     plus made-up trips: titles that don't exist anywhere in the catalog."""
-    known_numbers = {int(n) for n in re.findall(r"\d+", grounded + " " + user_text)}
+    known_numbers = {int(n) for n in re.findall(r"\d+", grounded + " " + user_text)} | budget_gaps(grounded, user_text)
     problems = [f"price €{p} not returned by any tool" for p in sorted(prices_in(reply)) if p not in known_numbers]
     low_reply, low_grounded = reply.lower(), grounded.lower()
     problems += [f"trip '{n}' not returned by any tool" for n in names if n.lower() in low_reply and n.lower() not in low_grounded]
