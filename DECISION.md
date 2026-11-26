@@ -298,6 +298,31 @@ Langfuse Cloud (EU), grouped in a session per conversation (`app/tracing.py`).
 | Per-user rate limiting, circuit breaker | Needs auth to know who the user is; the 6-round cap already bounds the cost of a turn. First item for production |
 | PII redaction, log retention | Chat text is logged as typed (`logs/turns.jsonl`, Langfuse) and users can type personal data. No form asks for any and the data is fake; in production: retention on Langfuse, its `mask` hook for emails/phones, and drop or rotate the local log |
 
+## Branches and CI/CD
+
+Git Flow: `master` is released, `develop` is the next release, work happens on `feature/*`, and
+`release/*` / `hotfix/*` branches end in a `v*` tag. GitHub Actions:
+
+- **CI** (every push to `develop`, every pull request into `develop`/`master`; feature, release and
+  hotfix branches are tested through their pull request): pytest, Docker
+  build, and a smoke test that starts the image with the fake LLM and sends a page, search and chat
+  request. No API keys and no cost, so it can run on every push; the suite takes ~11 s on Linux.
+  Two more jobs run in parallel with those: **ruff** (bugs, dead code, imports, outdated syntax; an explicit
+  rule list in `pyproject.toml`, no line length and no formatter, to avoid rewriting every file at once) with
+  **pip-audit** (known CVEs in the pinned packages: every commit on `master` becomes an image), and
+  **semgrep** (static security analysis, python/fastapi/secrets/dockerfile rulesets, from its official image
+  so it adds no dependency). The first run of each was fixed before adding it, so CI starts green.
+  They block CD too, since CD runs CI first.
+- **CD** (pushes to `master`, `v*` tags, pull requests into `master`): CI again in the same workflow, then
+  the image goes to GitHub's container registry, tagged `latest`/`sha-<commit>`, and with the version for a
+  tag. On a pull request it only builds the image: unmerged code could change or be rejected, so it is never
+  published, and the CI workflow already tests the pull request. The version is also baked in as
+  `LANGFUSE_RELEASE`, so traces say which release produced them. GitHub's own token pushes it: no secret.
+- **Not in the pipeline on purpose:** the LLM eval (it needs API keys and costs money, and its results vary
+  between runs, so it would need thresholds rather than pass/fail: a manual workflow with the keys as
+  secrets is the next step) and the deployment itself (it depends on where the image runs: a container
+  service would pull the new `latest` or the release tag).
+
 ## What I'd ship first and how I'd measure it
 
 Ship the assistant to a share of users (A/B), starting with searches that return zero results, where

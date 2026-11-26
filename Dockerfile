@@ -5,7 +5,11 @@
 # `ant auth login` profile instead of a key: -e ANTHROPIC_AUTH_TOKEN=<ant auth print-credentials --access-token>.
 FROM python:3.13-slim
 
-ENV PYTHONUNBUFFERED=1 \
+# The code version on Langfuse traces (app/tracing.py reads LANGFUSE_RELEASE; there is no git in the image).
+# CD passes the image version; a local build leaves it empty.
+ARG RELEASE=""
+ENV LANGFUSE_RELEASE=${RELEASE} \
+    PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
