@@ -16,9 +16,11 @@ permissions:
   contents: read
 
 # A newer push to the same branch cancels the run still going. github.workflow is the caller's name when CD
-# calls this file, so CD's run never cancels (or is cancelled by) a CI run on the same branch.
+# calls this file, so CD's run never cancels (or is cancelled by) a CI run on the same branch. The "ci-"
+# prefix keeps the group different from CD's own ("CD-<ref>"): without it, CI called from CD waited for the
+# group its caller holds, and GitHub cancelled the run as a deadlock on the first push to master.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
