@@ -1,9 +1,11 @@
+"""The FastAPI app: the page and the API (/api/search, /api/chat, /api/chat/{id}/reset, /api/ready,
+/api/meta), plus the background warm-up at startup."""
 from __future__ import annotations
 
 import logging
 import threading
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -62,7 +64,7 @@ def warm_up() -> None:
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
     # In a thread, so the page and the search answer at once; a chat sent during the warm-up waits only
     # for what isn't loaded yet.
     if config.settings.warmup:

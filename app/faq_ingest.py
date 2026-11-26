@@ -1,3 +1,5 @@
+"""Ingestion: `python -m app.faq_ingest` embeds the FAQs once and writes samples/faq_vectors.json,
+so the server doesn't embed them at every start. Run it after changing samples/faqs.json."""
 from __future__ import annotations
 
 import json

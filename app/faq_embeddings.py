@@ -1,3 +1,5 @@
+"""FAQ search by embeddings: the question is embedded and compared (cosine similarity) with the
+FAQ vectors, loaded from the ingested file or computed at startup."""
 from __future__ import annotations
 
 import hashlib

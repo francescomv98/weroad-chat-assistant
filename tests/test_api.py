@@ -1,3 +1,5 @@
+"""The HTTP API: search and chat endpoints, input validation, clean errors, session ids, and
+FIXED_TODAY applied across the app."""
 from datetime import date
 
 import pytest

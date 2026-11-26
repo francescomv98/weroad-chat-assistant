@@ -1,3 +1,5 @@
+"""Zero results: finds the cheapest changes to the search that bring trips back (wider dates, higher
+budget, nearby destinations...), each with its real result count. Deterministic, no LLM."""
 from __future__ import annotations
 
 import math

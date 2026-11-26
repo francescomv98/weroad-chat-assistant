@@ -1,3 +1,5 @@
+"""FAQ ingestion: the committed vectors match samples/faqs.json (the CI check), and the index uses
+the file only when it is up to date."""
 import json
 import logging
 

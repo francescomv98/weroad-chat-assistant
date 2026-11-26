@@ -1,3 +1,5 @@
+"""The exact search: text matching, date and price filters, moods, must-haves, sorting, and
+sold-out departures never shown."""
 from datetime import date
 
 from app.models import Moods, SearchState

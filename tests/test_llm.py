@@ -1,3 +1,5 @@
+"""The LLM clients without calling any API: response parsing, tool calls, refusals, prompt caching,
+token costs, timeouts and the fake client."""
 from types import SimpleNamespace as NS
 
 import pytest

@@ -1,3 +1,5 @@
+"""The LLM clients: Claude (Anthropic) and OpenAI behind one interface (`LLMClient`), so the
+assistant and the eval don't depend on the provider. Also the prices and the cost estimate per call."""
 from __future__ import annotations
 
 import json

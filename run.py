@@ -1,3 +1,5 @@
+"""Starts the app for development: the server with auto-reload, and the browser once the assistant
+is ready. `--no-browser` keeps the browser closed; PORT picks the port."""
 from __future__ import annotations
 
 import json

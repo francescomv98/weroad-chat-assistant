@@ -1,3 +1,5 @@
+"""One search call for the API and the assistant: the results, and when there are none, the
+suggested relaxations and the closest trips."""
 from __future__ import annotations
 
 from datetime import date

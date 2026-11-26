@@ -1,3 +1,5 @@
+"""The API's data shapes. `SearchState` is the search shared by the form and the assistant; the
+others describe results, suggested relaxations and the search response."""
 from __future__ import annotations
 
 from datetime import date

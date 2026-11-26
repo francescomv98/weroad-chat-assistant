@@ -1,3 +1,5 @@
+"""The agent loop with a fake LLM: tool calls change the search, errors go back to the model, round
+limit, rollback of failed turns, past dates, FAQ retrieval (index and embeddings)."""
 import json
 
 import pytest
