@@ -1,10 +1,12 @@
 from __future__ import annotations
+
 import argparse
 import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime
 from pathlib import Path
+
 from app import assistant as assistant_module
 from app import tracing
 from app.assistant import Assistant, summarise_for_model
@@ -16,7 +18,7 @@ from app.models import SearchState
 from app.prompts import build_tools
 from evals import checks
 
-FROZEN_TODAY = date(2026, 11, 24) 
+FROZEN_TODAY = date(2026, 11, 24)
 HERE = Path(__file__).resolve().parent
 
 
@@ -60,14 +62,14 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
 
     for i, turn in enumerate(scenario["turns"]):
         rec = {
-            "model": label, 
-            "scenario": scenario["id"], 
+            "model": label,
+            "scenario": scenario["id"],
             "category": scenario["category"],
-            "run": run, 
-            "turn": i, 
+            "run": run,
+            "turn": i,
             "user": turn["user"]
         }
-        
+
         user_text += " " + turn["user"]
         before = state.model_dump(mode="json")
         history_len = len(bot.sessions.get(session_id).messages) if session_id else 0
@@ -78,7 +80,7 @@ def run_scenario(label: str, client: LLMClient, scenario: dict, run: int, names:
         try:
             with tracing.context(eval_tags, eval_meta):
                 result = bot.chat(turn["user"], state, session_id)
-        except Exception as e:  
+        except Exception as e:
             rec["error"] = f"{type(e).__name__}: {e}"
             records.append(rec)
             records += [{**rec, "turn": j, "user": t["user"], "error": None, "skipped": True}
@@ -337,7 +339,7 @@ def main() -> None:
 
     out_dir = HERE / "results" / datetime.now().strftime("%Y%m%d-%H%M%S")
     out_dir.mkdir(parents=True)
-    
+
     assistant_module.settings = Settings(turn_log_path=str(out_dir / "assistant_log.jsonl"))
 
     catalog = get_catalog()
@@ -366,7 +368,7 @@ def main() -> None:
     with (out_dir / "turns.jsonl").open("w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-            
+
     summaries = {label: summarize([r for r in records if r["model"] == label]) for label in labels}
     report = render(summaries, records, args)
     (out_dir / "report.md").write_text(report, encoding="utf-8")

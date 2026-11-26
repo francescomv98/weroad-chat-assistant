@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import math
 import re
 import threading
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
+
 from .config import settings
 from .data import Faq
 from .llm import LLMProviderError
@@ -72,7 +74,7 @@ class FaqEmbeddingIndex:
             if key not in _vector_cache:
                 vectors, _tokens = self.embed(list(docs))
                 _vector_cache[key] = [_normalise(v) for v in vectors]
-                
+
             return _vector_cache[key]
 
     def search(self, query: str) -> tuple[list[tuple[Faq, float]], int]:
@@ -80,7 +82,11 @@ class FaqEmbeddingIndex:
         doc_vectors = self.vectors()
         [q], tokens = self.embed([clean_query(query)])
         q = _normalise(q)
-        scored = [(faq, sum(a * b for a, b in zip(q, v))) for faq, v in zip(self.faqs, doc_vectors)]
+        # strict: a vector per FAQ and the same dimensions everywhere; a mismatch is a bug, not a shorter list
+        scored = [
+            (faq, sum(a * b for a, b in zip(q, v, strict=True)))
+            for faq, v in zip(self.faqs, doc_vectors, strict=True)
+        ]
         scored.sort(key=lambda x: -x[1])
 
         return [(f, s) for f, s in scored[: self.top_k] if s >= self.min_similarity], tokens

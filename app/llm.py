@@ -1,7 +1,9 @@
 from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
+
 from .config import settings
 
 Stop = Literal["end", "tool_use", "max_tokens", "refusal"]
@@ -11,7 +13,7 @@ Stop = Literal["end", "tool_use", "max_tokens", "refusal"]
 class ToolCall:
     id: str
     name: str
-    arguments: dict[str, Any] | None  
+    arguments: dict[str, Any] | None
     raw_arguments: str = ""
 
 
@@ -20,7 +22,7 @@ class LLMResponse:
     text: str
     tool_calls: list[ToolCall]
     stop: Stop
-    usage: dict[str, int] = field(default_factory=dict)  
+    usage: dict[str, int] = field(default_factory=dict)
     # The provider's own reply blocks, replayed unchanged in the next request when the provider needs it
     # (Claude's thinking blocks). None for OpenAI.
     raw_content: Any = None
@@ -135,7 +137,7 @@ class OpenAIClient:
             tools=to_openai_tools(tools),
             max_completion_tokens=8000
         )
-        if self.effort:  
+        if self.effort:
             kwargs["reasoning_effort"] = self.effort
         if self.prompt_cache_key:
             kwargs["prompt_cache_key"] = self.prompt_cache_key
@@ -259,7 +261,7 @@ class AnthropicClient:
             model=self.model,
             max_tokens=16000,
             system=system,
-            tools=tools,  
+            tools=tools,
             messages=to_anthropic_messages(messages),
             cache_control={"type": "ephemeral"}
         )
@@ -307,7 +309,8 @@ def make_client() -> LLMClient:
     if settings.llm_provider == "anthropic":
         return AnthropicClient()
     if settings.llm_provider == "fake":
-        from .fake_llm import FakeClient  # load tests only; imported here so llm.py doesn't depend on it
+        # load tests only; imported here so llm.py doesn't depend on it
+        from .fake_llm import FakeClient
 
         return FakeClient()
     if settings.llm_provider != "openai":

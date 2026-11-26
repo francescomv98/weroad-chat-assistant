@@ -5,11 +5,13 @@ runs the turn and saves it only if the turn succeeded. In production a RedisSess
 three methods (history as JSON, an expiry on each key) would let several processes share sessions.
 """
 from __future__ import annotations
+
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Protocol
 
 
 @dataclass

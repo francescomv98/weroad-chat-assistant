@@ -5,10 +5,12 @@ do, but calls no API: a load test then measures this server (threads, sessions, 
 without spending tokens or hitting the provider's rate limits.
 """
 from __future__ import annotations
+
 import itertools
 import json
 import time
 import uuid
+
 from .config import settings
 from .llm import LLMResponse, ToolCall
 

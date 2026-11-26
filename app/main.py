@@ -1,14 +1,18 @@
 from __future__ import annotations
+
 import logging
 import threading
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
-from fastapi import FastAPI, HTTPException, Path as PathParam
+
+from fastapi import FastAPI, HTTPException
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from pathlib import Path
+
 from . import config, service, tracing
 from .assistant import Assistant
 from .data import get_catalog
@@ -131,7 +135,7 @@ def chat(req: ChatRequest) -> ChatResponse:
     try:
         turn = get_assistant().chat(req.message, req.state, req.session_id)
     except LLMProviderError as e:
-        raise HTTPException(e.status, e.message)
+        raise HTTPException(e.status, e.message) from e
     return ChatResponse(session_id=turn.session_id, reply=turn.reply, search=turn.search, meta=turn.meta)
 
 

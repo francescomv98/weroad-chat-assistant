@@ -1,4 +1,5 @@
 from datetime import date
+
 from app.models import Moods, SearchState
 from app.search import run_search, text_score
 from tests.conftest import TODAY, titles

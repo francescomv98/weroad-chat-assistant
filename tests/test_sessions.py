@@ -1,5 +1,7 @@
 import threading
+
 import pytest
+
 from app.assistant import Assistant
 from app.llm import LLMProviderError
 from app.models import SearchState

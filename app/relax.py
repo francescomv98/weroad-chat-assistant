@@ -1,8 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass
+
 import math
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Callable
+
 from .data import Catalog
 from .models import Moods, Relaxation, SearchState
 from .search import run_search, tokenize
@@ -118,7 +120,7 @@ def find_relaxations(catalog: Catalog, state: SearchState, today: date) -> list[
     for step in steps:
         if step.field not in strongest or step.cost > strongest[step.field].cost:
             strongest[step.field] = step
-    if "must_have" in strongest: 
+    if "must_have" in strongest:
         strongest["must_have"] = _Step("must_have", 4, "drop the must-have activities", _upd(must_have=[]))
     current, descriptions, fields = state, [], []
     for step in sorted(strongest.values(), key=lambda s: s.cost):

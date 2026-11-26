@@ -1,6 +1,7 @@
 """The evaluation's own checks: a wrong metric is worse than no metric."""
 import json
 from pathlib import Path
+
 from app.data import get_catalog
 from evals import checks
 

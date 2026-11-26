@@ -1,0 +1,12 @@
+# Tool settings only: the app is not packaged, dependencies stay in requirements*.txt.
+
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["venv", "evals/results", "logs"]
+
+[tool.ruff.lint]
+# An explicit list, so local runs and CI check the same rules whatever ruff's defaults become.
+# Bugs and dead code (F, B, E4/E7/E9), import order (I), whitespace (W), outdated syntax (UP).
+# Not E501: line length is a style choice, and there is no formatter yet. Not S: security is semgrep's job
+# in CI, and S101 would flag every assert in the tests.
+select = ["E4", "E7", "E9", "F", "W", "I", "B", "UP"]
