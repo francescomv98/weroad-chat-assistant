@@ -10,7 +10,8 @@ filters, the results list updates, and zero results is never a dead end. Sold-ou
 
 Stack: Python 3, FastAPI, Pydantic v2, Anthropic Claude Haiku 5.5 (default, `LLM_PROVIDER`) or OpenAI gpt-4.1-mini,
 OpenAI text-embedding-3-small for FAQ search, a single static HTML page.
-Data: `samples/trips.json` (50 trips x 10 departures) and `samples/faqs.json` (50 FAQs), loaded in memory.
+Data: `samples/trips.json` (50 trips x 10 departures) and `samples/faqs.json` (50 FAQs), loaded in memory;
+`samples/faq_vectors.json` holds the FAQ embeddings, written by `python -m app.faq_ingest`.
 
 ## Commands (Windows, from the repo root)
 
@@ -22,6 +23,7 @@ venv\Scripts\python.exe -m evals.run --only faq_near_miss,refine --runs 2 --work
 venv\Scripts\python.exe -m evals.run --models gpt-4.1-mini gpt-4o-mini
 venv\Scripts\python.exe -m evals.run --faq-retrievers index embeddings
 venv\Scripts\python.exe -m evals.load                     # load test with the fake LLM: free, ~1.5 min
+venv\Scripts\python.exe -m app.faq_ingest                 # after editing faqs.json: re-embed, commit faq_vectors.json
 venv\Scripts\ruff.exe check .                             # lint (rules in pyproject.toml); --fix for the safe fixes
 venv\Scripts\pip-audit.exe -r requirements-dev.txt        # known CVEs in the pinned packages
 docker run --rm -v "${PWD}:/src" -w /src semgrep/semgrep:1.160.0 semgrep scan --error --metrics off --config p/python --config p/fastapi --config p/secrets --config p/dockerfile --exclude venv --exclude evals/results --exclude logs
@@ -63,6 +65,7 @@ app/assistant.py      agent loop: tools update_search, get_trip_details, FAQ too
 app/sessions.py       SessionStore (get/save/delete); in memory with idle expiry and a cap; Redis would plug in here
 app/prompts.py        system prompt + tool schemas (FAQ rules/tool depend on FAQ_RETRIEVER)
 app/faq_embeddings.py embedding FAQ search (default retriever); "index" = model picks from FAQ titles
+app/faq_ingest.py     ingestion: embeds the FAQs once into samples/faq_vectors.json (no OpenAI call at startup)
 app/llm.py            LLMClient protocol, OpenAI and Anthropic clients, prices and cost estimate
 app/fake_llm.py       LLM_PROVIDER=fake: waits like a real call, calls nothing; only for evals/load.py
 app/tracing.py        optional Langfuse traces (one per turn) and eval scores; no-op without keys, off in tests

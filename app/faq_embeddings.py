@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import logging
 import math
 import re
 import threading
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from .config import settings
-from .data import Faq
+from .data import SAMPLES_DIR, Faq
 from .llm import LLMProviderError
+
+log = logging.getLogger(__name__)
 
 EmbedFn = Callable[[list[str]], tuple[list[list[float]], int]]
 
@@ -58,22 +64,58 @@ def _normalise(v: list[float]) -> list[float]:
 _vector_cache: dict[tuple, list[list[float]]] = {}
 _cache_lock = threading.Lock()
 
+# Written by the ingestion step (`python -m app.faq_ingest`), committed, and shipped in the Docker image.
+VECTORS_PATH = SAMPLES_DIR / "faq_vectors.json"
+
+
+def documents_hash(docs: Sequence[str], model: str) -> str:
+    """Identifies what the vectors were computed from: any change to a FAQ, to how a FAQ becomes a document
+    (`faq_document`) or to the model gives a different hash, so an outdated file is never used."""
+    h = hashlib.sha256(model.encode())
+    for d in docs:
+        h.update(b"\0" + d.encode())
+    return h.hexdigest()
+
+
+def load_vectors(path: Path, docs: Sequence[str], model: str) -> list[list[float]] | None:
+    """The vectors in `path` if they were computed from exactly these documents with this model, else None."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        log.info("FAQ vectors: %s not found, computing them (run python -m app.faq_ingest)", path.name)
+        return None
+    except (OSError, ValueError) as e:
+        log.warning("FAQ vectors: %s unreadable (%s), computing them", path.name, e)
+        return None
+    if data.get("model") != model or data.get("documents_sha256") != documents_hash(docs, model):
+        # The FAQs changed (or the model) without a new ingestion: the old vectors would rank the wrong FAQs.
+        log.warning("FAQ vectors: %s is out of date, computing them (run python -m app.faq_ingest)", path.name)
+        return None
+    return data["vectors"]
+
 
 class FaqEmbeddingIndex:
     def __init__(self, faqs: Sequence[Faq], embed: EmbedFn | None = None,
-                 top_k: int = 3, min_similarity: float | None = None) -> None:
+                 top_k: int = 3, min_similarity: float | None = None, vectors_path: Path | None = None) -> None:
         self.faqs = tuple(faqs)
         self.embed = embed or openai_embed
+        # The ingested file holds OpenAI vectors: by default it is used only with the OpenAI embeddings, so
+        # an index with another `embed` (the tests' fake) never mixes its query vectors with those.
+        self.vectors_path = vectors_path if vectors_path is not None else (VECTORS_PATH if embed is None else None)
         self.top_k = top_k
         self.min_similarity = settings.faq_min_similarity if min_similarity is None else min_similarity
 
     def vectors(self) -> list[list[float]]:
         docs = tuple(faq_document(f) for f in self.faqs)
-        key = (self.embed, settings.embedding_model, docs)
+        model = settings.embedding_model
+        key = (self.embed, model, docs, self.vectors_path)
         with _cache_lock:
             if key not in _vector_cache:
-                vectors, _tokens = self.embed(list(docs))
-                _vector_cache[key] = [_normalise(v) for v in vectors]
+                ingested = load_vectors(self.vectors_path, docs, model) if self.vectors_path else None
+                if ingested is None:
+                    vectors, _tokens = self.embed(list(docs))
+                    ingested = [_normalise(v) for v in vectors]
+                _vector_cache[key] = ingested
 
             return _vector_cache[key]
 
