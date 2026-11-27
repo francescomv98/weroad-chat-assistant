@@ -352,7 +352,8 @@
         {
           "user": "Write me a poem about cats",
           "expect": {},
-          "tools": {"must_not": ["update_search", "get_faqs", "get_trip_details"]}
+          "tools": {"must_not": ["update_search", "get_faqs", "get_trip_details"]},
+          "reply_excludes": ["help centre", "WeRoad support"]
         }
       ]
     },
@@ -837,6 +838,30 @@
           "user": "can I bring my dog on the trip?",
           "tools": {"must_not": ["update_search"]},
           "faq": {"none": true}
+        }
+      ]
+    },
+    {
+      "id": "faq-none-packing-vietnam",
+      "category": "faq_no_answer",
+      "turns": [
+        {
+          "user": "What should I bring to Vietnam?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true},
+          "reply_excludes": ["sunscreen", "mosquito", "rain jacket", "adapter", "light clothes"]
+        }
+      ]
+    },
+    {
+      "id": "faq-none-packing-general",
+      "category": "faq_no_answer",
+      "turns": [
+        {
+          "user": "What should I bring for a trip?",
+          "tools": {"must_not": ["update_search"]},
+          "faq": {"none": true},
+          "reply_excludes": ["sunscreen", "passport", "charger", "adapter", "comfortable shoes"]
         }
       ]
     },
