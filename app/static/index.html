@@ -382,14 +382,24 @@ function fmtDate(iso) {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
+const UNAVAILABLE = "The service is unavailable at the moment. It will return soon!";
+
 async function api(path, body) {
-  const res = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch (e) {
+    // The server can't be reached (stopped, restarting, no network): the browser's own text is "Failed to fetch".
+    throw new Error(UNAVAILABLE);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // A proxy in front of a stopped server (Cloud Run, nginx) answers 502/503/504 without our JSON detail.
+    if ([502, 503, 504].includes(res.status) && !data.detail) throw new Error(UNAVAILABLE);
     const d = data.detail;
     const msg = Array.isArray(d)
       ? d.map((e) => e.msg.replace(/^Value error,\s*/, "")).join("; ")
