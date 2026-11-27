@@ -237,6 +237,8 @@
   @keyframes blink { 50% { opacity: .2; transform: translateY(-2px); } }
 
   .starters { padding: 0 18px 10px; }
+  /* .chips sets display: flex, which would override the hidden attribute and keep the suggestions visible. */
+  .starters[hidden] { display: none; }
   .starters .chip { font-size: 12.5px; }
 
   .composer {
