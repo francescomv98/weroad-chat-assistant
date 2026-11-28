@@ -69,7 +69,7 @@ app/faq_ingest.py     ingestion: embeds the FAQs once into samples/faq_vectors.j
 app/llm.py            LLMClient protocol, OpenAI and Anthropic clients, prices and cost estimate
 app/fake_llm.py       LLM_PROVIDER=fake: waits like a real call, calls nothing; only for evals/load.py
 app/tracing.py        optional Langfuse traces (one per turn) and eval scores; no-op without keys, off in tests
-app/main.py           FastAPI: /api/search, /api/chat, /api/chat/{id}/reset, /api/meta, /; startup warm-up
+app/main.py           FastAPI: /api/search, /api/chat, /api/chat/{id}/reset, /api/meta, /, /static; startup warm-up
 evals/                scenarios.json, deterministic checks, run.py -> evals/results/<timestamp>/; load.py
 tests/                pytest; the LLM is always a FakeLLM, embeddings a fake_embed;
                       test_invariants.py checks the business rules on random searches
