@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import FastAPI, HTTPException
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import config, service, tracing
@@ -76,6 +77,8 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title="WeRoad search assistant", lifespan=lifespan)
+# The page's own files (the WeRoad icon for the tab and the header) at /static/...
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", include_in_schema=False)
